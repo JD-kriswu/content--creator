@@ -1,0 +1,23 @@
+# Backend runtime & secrets
+backend/config.json
+backend/data/
+server.pid
+server.log
+content-creator-imm
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# Go build output
+*.test
+
+# IDE
+.idea/
+.vscode/
+
+# Misc
+*.local
+.DS_Store
+.my.cnf*
+.mysql*
