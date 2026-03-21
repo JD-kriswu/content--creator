@@ -49,9 +49,9 @@ function formatDate(dateStr: string): string {
 
 <style scoped>
 .script-list { flex: 1; overflow-y: auto; }
-.hint { padding: 16px; color: #475569; font-size: 13px; text-align: center; }
-.script-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #1e2133; }
-.script-item:hover { background: #1e2133; }
-.title { font-size: 13px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.meta { font-size: 11px; color: #475569; margin-top: 4px; }
+.hint { padding: 16px; color: #9ca3af; font-size: 13px; text-align: center; }
+.script-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f3e8ff; transition: background 0.15s; }
+.script-item:hover { background: #fce7f3; }
+.title { font-size: 13px; color: #1e1b4b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { font-size: 11px; color: #a78bfa; margin-top: 4px; }
 </style>

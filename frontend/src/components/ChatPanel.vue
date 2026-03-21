@@ -77,8 +77,19 @@
           <div class="msg-avatar" :class="msg.role === 'user' ? 'user-av' : 'ai'">
             {{ msg.role === 'user' ? '👤' : '🤖' }}
           </div>
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <div class="msg-bubble" :class="{ streaming: msg.streaming }" v-html="msg.html" />
+          <div class="msg-col">
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div class="msg-bubble" :class="{ streaming: msg.streaming }" v-html="msg.html" />
+            <el-button
+              v-if="msg.retryable"
+              size="small"
+              type="danger"
+              plain
+              class="retry-btn"
+              :disabled="chatStore.sending"
+              @click="chatStore.retry()"
+            >🔄 重试</el-button>
+          </div>
         </div>
       </template>
     </div>
@@ -120,20 +131,16 @@ watch(() => chatStore.messages.length, () => {
   })
 })
 
-// Also watch for streaming updates (token events update existing message, length doesn't change)
 watch(() => chatStore.messages.map(m => m.html).join(''), () => {
   nextTick(() => {
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
   })
 })
 
-// Emit scriptSaved when complete event arrives
-watch(() => chatStore.messages, (msgs) => {
-  const last = msgs[msgs.length - 1]
-  if (last?.html?.includes('稿件已保存')) {
-    emit('scriptSaved')
-  }
-}, { deep: true })
+// Emit scriptSaved reliably when complete event fires (via store counter)
+watch(() => chatStore.justCompleted, () => {
+  emit('scriptSaved')
+})
 
 function doSend() {
   const text = inputText.value.trim()
@@ -158,7 +165,11 @@ function showScriptDetail(title: string, content: string) {
   chatStore.messages.length = 0
 }
 
-defineExpose({ showWelcome, showScriptDetail })
+function clearScriptDetail() {
+  scriptDetail.value = null
+}
+
+defineExpose({ showWelcome, showScriptDetail, clearScriptDetail })
 
 function simDisplay(data: SimilarityData) {
   const total = data.total ?? 0
@@ -175,51 +186,58 @@ function simDisplay(data: SimilarityData) {
 </script>
 
 <style scoped>
-.chat-panel { display: flex; flex-direction: column; height: 100%; background: #0f1117; }
+.chat-panel { display: flex; flex-direction: column; height: 100%; background: #fdf4ff; }
 .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-.welcome { text-align: center; margin: auto; color: #64748b; max-width: 480px; }
-.welcome h2 { font-size: 24px; color: #a78bfa; margin-bottom: 12px; }
-.welcome p { margin-bottom: 16px; line-height: 1.6; }
-.hint-box { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.8; text-align: left; }
+.welcome { text-align: center; margin: auto; color: #9ca3af; max-width: 480px; }
+.welcome h2 { font-size: 24px; background: linear-gradient(135deg, #c026d3, #7c3aed); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 12px; }
+.welcome p { margin-bottom: 16px; line-height: 1.6; color: #6b7280; }
+.hint-box { background: #ffffff; border: 1px solid #f0abfc; border-radius: 12px; padding: 14px 16px; font-size: 13px; line-height: 1.8; text-align: left; color: #4b5563; box-shadow: 0 2px 8px rgba(192,38,211,0.06); }
 .msg-row { display: flex; gap: 8px; align-items: flex-start; }
 .msg-row.user { flex-direction: row-reverse; }
-.msg-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: #2a2d3e; }
-.user-av { background: #7c3aed; }
-.ai { background: #1e293b; }
-.msg-bubble { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 10px 14px; max-width: 720px; font-size: 14px; line-height: 1.6; color: #e2e8f0; word-break: break-word; }
-.msg-row.user .msg-bubble { background: #4c1d95; border-color: #6d28d9; }
-.streaming::after { content: '▊'; animation: blink .7s step-end infinite; color: #a78bfa; }
+.msg-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: #f3e8ff; }
+.user-av { background: linear-gradient(135deg, #c026d3, #7c3aed); }
+.ai { background: #fce7f3; }
+.msg-bubble { background: #ffffff; border: 1px solid #f0abfc; border-radius: 12px; padding: 10px 14px; max-width: 720px; font-size: 14px; line-height: 1.6; color: #1e1b4b; word-break: break-word; box-shadow: 0 1px 4px rgba(192,38,211,0.06); }
+.msg-row.user .msg-bubble { background: linear-gradient(135deg, #c026d3, #7c3aed); border-color: transparent; color: #ffffff; box-shadow: 0 2px 8px rgba(192,38,211,0.25); }
+.streaming::after { content: '▊'; animation: blink .7s step-end infinite; color: #c026d3; }
 @keyframes blink { 50% { opacity: 0; } }
-.outline-card { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 16px; max-width: 680px; }
-.outline-card h4 { color: #a78bfa; margin: 0 0 12px; font-size: 14px; }
-.elements { margin-bottom: 10px; font-size: 12px; color: #94a3b8; }
+.outline-card { background: #ffffff; border: 1px solid #f0abfc; border-radius: 12px; padding: 16px; max-width: 680px; box-shadow: 0 2px 8px rgba(192,38,211,0.08); }
+.outline-card h4 { color: #c026d3; margin: 0 0 12px; font-size: 14px; }
+.elements { margin-bottom: 10px; font-size: 12px; color: #9ca3af; }
 .outline-row { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-size: 13px; }
-.part-content { color: #e2e8f0; flex: 1; }
-.duration { color: #64748b; font-size: 12px; }
+.part-content { color: #374151; flex: 1; }
+.duration { color: #9ca3af; font-size: 12px; }
 .action-btns { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }
-.sim-card { display: flex; flex-wrap: wrap; gap: 12px; background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 14px; }
+.sim-card { display: flex; flex-wrap: wrap; gap: 12px; background: #ffffff; border: 1px solid #f0abfc; border-radius: 12px; padding: 14px; box-shadow: 0 2px 8px rgba(192,38,211,0.08); }
 .sim-item { text-align: center; min-width: 60px; }
-.label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
-.value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
-.value.ok { color: #34d399; }
-.value.warn { color: #fbbf24; }
-.value.bad { color: #f87171; }
-.script-detail { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 12px; padding: 20px; }
-.script-detail h3 { color: #a78bfa; margin: 0 0 12px; font-size: 16px; }
-.script-detail pre { white-space: pre-wrap; color: #e2e8f0; font-size: 14px; line-height: 1.6; margin: 0; }
-.input-area { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #2a2d3e; background: #1a1d27; flex-shrink: 0; }
-.input-area :deep(.el-textarea__inner) { background: #0f1117; color: #e2e8f0; border-color: #2a2d3e; }
-:deep(.step-badge) { background: #1e2133; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #94a3b8; display: inline-block; }
-:deep(.info-badge) { font-size: 12px; color: #64748b; padding: 2px 8px; display: inline-block; }
-:deep(.err-text) { color: #f87171; }
-:deep(.ok-text) { color: #34d399; }
-:deep(.hint-text) { color: #64748b; font-size: 13px; }
-:deep(h3) { color: #a78bfa; margin: 8px 0 4px; }
-:deep(strong) { color: #c4b5fd; }
-:deep(code) { background: #1e2133; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+.label { font-size: 11px; color: #9ca3af; margin-bottom: 4px; }
+.value { font-size: 16px; font-weight: 700; color: #1e1b4b; }
+.value.ok { color: #059669; }
+.value.warn { color: #d97706; }
+.value.bad { color: #e11d48; }
+.msg-col { display: flex; flex-direction: column; gap: 6px; max-width: 720px; }
+.retry-btn { align-self: flex-start; }
+.msg-row.user .msg-col { align-items: flex-end; }
+.script-detail h3 { color: #c026d3; margin: 0 0 12px; font-size: 16px; }
+.script-detail pre { white-space: pre-wrap; color: #374151; font-size: 14px; line-height: 1.6; margin: 0; }
+.input-area { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #f0abfc; background: #ffffff; flex-shrink: 0; box-shadow: 0 -2px 8px rgba(192,38,211,0.06); }
+.input-area :deep(.el-textarea__inner) { background: #fdf4ff; color: #1e1b4b; border-color: #f0abfc; border-radius: 10px; }
+.input-area :deep(.el-textarea__inner:focus) { border-color: #c026d3; box-shadow: 0 0 0 2px rgba(192,38,211,0.1); }
+.input-area :deep(.el-button--primary) { background: linear-gradient(135deg, #c026d3, #7c3aed); border: none; border-radius: 10px; padding: 0 16px; }
+:deep(.el-button--primary) { background: linear-gradient(135deg, #c026d3, #7c3aed); border: none; }
+:deep(.el-tag) { background: #fce7f3; border-color: #f9a8d4; color: #9d174d; }
+:deep(.el-tag--info) { background: #f3e8ff; border-color: #d8b4fe; color: #6d28d9; }
+:deep(.step-badge) { background: #fce7f3; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: #9d174d; display: inline-block; border: 1px solid #f9a8d4; }
+:deep(.info-badge) { font-size: 12px; color: #9ca3af; padding: 2px 8px; display: inline-block; }
+:deep(.err-text) { color: #e11d48; }
+:deep(.ok-text) { color: #059669; }
+:deep(.hint-text) { color: #9ca3af; font-size: 13px; }
+:deep(h3) { color: #c026d3; margin: 8px 0 4px; }
+:deep(strong) { color: #7c3aed; }
+:deep(code) { background: #fce7f3; padding: 1px 5px; border-radius: 4px; font-size: 13px; color: #9d174d; }
 :deep(table) { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
-:deep(td), :deep(th) { border: 1px solid #2a2d3e; padding: 6px 10px; }
-:deep(th) { background: #1e2133; color: #94a3b8; }
+:deep(td), :deep(th) { border: 1px solid #f0abfc; padding: 6px 10px; }
+:deep(th) { background: #fce7f3; color: #7c3aed; }
 :deep(ul) { padding-left: 20px; margin: 4px 0; }
-:deep(li) { margin: 2px 0; }
+:deep(li) { margin: 2px 0; color: #374151; }
 </style>

@@ -93,19 +93,33 @@ function extractError(e: unknown): string {
 
 <style scoped>
 .login-page {
-  min-height: 100vh;
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0f1117;
+  background: linear-gradient(135deg, #fdf4ff 0%, #fce7f3 50%, #ede9fe 100%);
 }
 .login-card {
   width: 380px;
-  --el-card-bg-color: #1a1d27;
-  --el-border-color: #2a2d3e;
-  border-radius: 16px;
+  --el-card-bg-color: #ffffff;
+  --el-border-color: #f0abfc;
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(192, 38, 211, 0.12);
+  border: none;
 }
-h1 { text-align: center; color: #e2e8f0; font-size: 22px; margin: 0 0 8px; }
-.subtitle { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 24px; }
-.error-msg { color: #f87171; font-size: 13px; text-align: center; margin-top: 12px; }
+h1 {
+  text-align: center;
+  background: linear-gradient(135deg, #c026d3, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 22px;
+  margin: 0 0 8px;
+}
+.subtitle { text-align: center; color: #9ca3af; font-size: 14px; margin-bottom: 24px; }
+.error-msg { color: #e11d48; font-size: 13px; text-align: center; margin-top: 12px; }
+:deep(.el-tabs__item.is-active) { color: #c026d3; }
+:deep(.el-tabs__active-bar) { background-color: #c026d3; }
+:deep(.el-button--primary) { background: linear-gradient(135deg, #c026d3, #7c3aed); border: none; }
+:deep(.el-button--primary:hover) { opacity: 0.9; }
 </style>

@@ -67,6 +67,9 @@ func main() {
 
 		api.GET("/scripts", handler.GetScripts)
 		api.GET("/scripts/:id", handler.GetScript)
+
+		api.GET("/conversations", handler.GetConversations)
+		api.GET("/conversations/:id", handler.GetConversationDetail)
 	}
 
 	addr := ":" + config.C.Port

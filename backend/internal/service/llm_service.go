@@ -8,11 +8,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"content-creator-imm/config"
 )
 
 const claudeModel = "glm-5"
+
+var httpClient = &http.Client{Timeout: 300 * time.Second}
 
 func apiURL() string {
 	base := strings.TrimRight(config.C.LLMBaseURL, "/")
@@ -39,10 +42,15 @@ type claudeRequest struct {
 type StreamCallback func(token string) bool
 
 // CallClaude sends a non-streaming request and returns the full response text.
-func CallClaude(system, userPrompt string) (string, error) {
+// maxTokens=0 uses default (2048).
+func CallClaude(system, userPrompt string, maxTokens ...int) (string, error) {
+	tokens := 2048
+	if len(maxTokens) > 0 && maxTokens[0] > 0 {
+		tokens = maxTokens[0]
+	}
 	reqBody := claudeRequest{
 		Model:     claudeModel,
-		MaxTokens: 4096,
+		MaxTokens: tokens,
 		System:    system,
 		Messages:  []Message{{Role: "user", Content: userPrompt}},
 		Stream:    false,
@@ -54,7 +62,7 @@ func CallClaude(system, userPrompt string) (string, error) {
 	req.Header.Set("x-api-key", config.C.AnthropicKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("claude api: %w", err)
 	}
@@ -103,7 +111,7 @@ func StreamClaude(system, userPrompt string, cb StreamCallback) (string, error) 
 	req.Header.Set("x-api-key", config.C.AnthropicKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("claude api stream: %w", err)
 	}
@@ -116,9 +124,9 @@ func StreamClaude(system, userPrompt string, cb StreamCallback) (string, error) 
 
 	var sb strings.Builder
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 64*1024), 64*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
-		// Support both "data: " (standard) and "data:" (no space)
 		var payload string
 		if strings.HasPrefix(line, "data: ") {
 			payload = strings.TrimPrefix(line, "data: ")
@@ -150,3 +158,4 @@ func StreamClaude(system, userPrompt string, cb StreamCallback) (string, error) 
 	}
 	return sb.String(), scanner.Err()
 }
+

@@ -5,13 +5,13 @@ export function getSession() {
 }
 
 export function resetSession() {
-  return request.post('/chat/reset')
+  return request.post<{ message: string; conv_id: number }>('/chat/reset')
 }
 
 // Returns a fetch Response with ReadableStream for SSE (POST, not EventSource)
 export async function sendMessage(message: string): Promise<Response> {
   const token = localStorage.getItem('token') ?? ''
-  return fetch('/api/chat/message', {
+  return fetch('/creator/api/chat/message', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ message })

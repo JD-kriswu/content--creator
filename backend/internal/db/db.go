@@ -51,5 +51,7 @@ func Init() error {
 		&model.User{},
 		&model.UserStyle{},
 		&model.Script{},
+		&model.Conversation{},
+		&model.Message{},
 	)
 }

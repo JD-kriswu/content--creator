@@ -3,7 +3,7 @@ import Login from '@/views/Login.vue'
 import Home from '@/views/Home.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory('/creator/'),
   routes: [
     { path: '/login', component: Login },
     { path: '/', component: Home, meta: { requiresAuth: true } },
