@@ -35,6 +35,7 @@ Tailwind CSS 4 (@tailwindcss/vite 插件)
 shadcn/ui 组件（Radix UI 基础）
 lucide-react（图标）
 sonner（Toast 通知）
+next-themes（暗色模式主题切换）
 clsx + tailwind-merge + class-variance-authority
 ```
 
@@ -81,12 +82,24 @@ frontend/
     └── pages/
         ├── Home.tsx                 # Landing 营销首页
         ├── Auth.tsx                 # 登录 / 注册
-        └── Dashboard.tsx           # 主创作区（受保护）
+        ├── Dashboard.tsx            # 主创作区（受保护）
+        ├── Result.tsx               # 稿件结果详情（受保护）
+        └── History.tsx              # 历史记录列表（受保护）
 ```
 
 ---
 
 ## 5. 页面设计
+
+路由结构（含新增页面）：
+
+| 路径 | 页面 | 权限 |
+|------|------|------|
+| `/` | Landing 营销首页 | 公开 |
+| `/auth` | 登录 / 注册 | 公开（已登录跳 /dashboard） |
+| `/dashboard` | 主创作区 | 需登录 |
+| `/result/:id` | 稿件结果详情 | 需登录 |
+| `/history` | 历史记录列表 | 需登录 |
 
 ### 5.1 Landing（`/`）
 
@@ -142,16 +155,35 @@ frontend/
 
 **Outline 确认交互细节：**
 
-- `outline` SSE 事件：在右侧显示 `OutlineEditor`（大纲预览），同时左侧 `MessageList` 中显示 `action` 事件的选项按钮（1/2/3/4）
+- `outline` SSE 事件：在右侧显示 `OutlineEditor`（大纲**可编辑** textarea），同时左侧 `MessageList` 中显示 `action` 事件的选项按钮（1/2/3/4）
+- 用户可在右侧 OutlineEditor 中修改大纲内容（纯客户端编辑，不提交后端）
 - 用户点击左侧 action 按钮 → 调用 `sendMessage('1')`（或对应数字）→ 进入 `writing` 状态
-- `OutlineEditor` 为只读展示，不支持编辑大纲内容，确认动作通过左侧 action 按钮完成
 
 **ScriptEditor 数据来源：**
 
 - 稿件内容来源于 SSE `token` 事件的累积流式文本（在内存中逐字追加）
 - 收到 `complete` 事件后，将累积文本传入 `ScriptEditor` 展示
 - `ScriptEditor` 只支持客户端复制和导出（.txt），不提交后端（无 PUT /api/scripts/:id 接口）
-- 稿件已在后端持久化，`scriptId` 可用于将来跳转查看
+- 收到 `complete` 事件后，`ScriptEditor` 底部展示"查看完整结果"按钮，点击跳转到 `/result/:scriptId`
+
+### 5.4 Result（`/result/:id`，受保护）
+
+从 `assert/src/app/pages/Result.tsx` 改造，对接真实后端：
+- 通过 `GET /api/scripts/:id` 获取稿件内容（content）和 similarity_score
+- 展示相似度进度条（绿色 < 30%，红色 ≥ 30%）
+- 稿件内容只读展示区（max-height 可滚动）
+- 一键复制按钮
+- 👍👎 反馈功能（本地 localStorage 存储，后端无反馈接口）
+- "继续创作"跳转 `/dashboard`
+
+### 5.5 History（`/history`，受保护）
+
+从 `assert/src/app/pages/History.tsx` 改造，对接真实后端：
+- 调用 `GET /api/conversations` 获取会话列表（最近 50 条）
+- 每条显示：标题、创建时间、状态（完成/进行中）
+- 点击"查看"跳转到 `/result/:script_id`（若 conversation.script_id 存在）或恢复会话到 Dashboard
+- 删除功能：前端隐藏（后端无删除接口），保留视觉按钮但 disabled 或隐藏
+- Layout Header 导航中加入"历史"链接（登录后显示）
 
 ---
 
@@ -226,6 +258,17 @@ const response = await fetch('/creator/api/chat/message', {
 - 背景：`bg-gradient-to-br from-blue-50 via-white to-purple-50`
 - 侧边栏：`bg-gray-50`
 
+**暗色模式：**
+- `assert/src/styles/theme.css` 中已有完整 `.dark {}` CSS 变量定义
+- 使用 `next-themes` 包实现主题切换（ThemeProvider 包裹 App）
+- Layout Header 中添加主题切换按钮（sun/moon 图标）
+- Dashboard 全屏布局同样适配暗色变量
+
+**移动端适配：**
+- Landing、Auth、History、Result 页使用响应式 Tailwind 类（`sm:`、`md:` 前缀），已在设计稿中实现
+- Layout 登录后底部导航栏（`md:hidden` 固定定位）：首页 / 历史 / 账户 三标签
+- Dashboard 在移动端仅显示聊天区（右侧 PreviewPanel 隐藏，`hidden md:block`）
+
 ---
 
 ## 8. 构建与部署
@@ -252,9 +295,4 @@ proxy: {
 ## 9. 不在本次范围内
 
 - 后端任何改动
-- 手机号/短信/微信登录
-- 稿件详情独立页面（`/result/:id`）
-- 历史记录独立页面（`/history`），历史会话通过 Dashboard 侧边栏访问
-- 暗色模式
-- 移动端适配（Dashboard 仅桌面端）
-- 大纲编辑（OutlineEditor 只读，确认通过 action 按钮完成）
+- 手机号/短信/微信登录（需后端扩展，排除）
