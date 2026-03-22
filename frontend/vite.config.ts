@@ -1,20 +1,21 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [react(), tailwindcss()],
   base: '/creator/',
-  resolve: {
-    alias: { '@': resolve(__dirname, 'src') }
-  },
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      '/creator/api': {
         target: 'http://localhost:3004',
-        changeOrigin: true
-      }
-    }
-  }
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/creator\/api/, '/api'),
+      },
+    },
+  },
+  build: {
+    outDir: 'dist',
+  },
 })
