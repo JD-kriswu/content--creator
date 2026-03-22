@@ -79,7 +79,7 @@ export function MessageList({ messages, onAction, disabled }: MessageListProps) 
               </div>
             )}
 
-            {msg.type === 'similarity' && msg.data && (
+            {msg.type === 'similarity' && !!msg.data && (
               <div className="rounded-xl px-3 py-2 bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 text-sm border border-green-200 dark:border-green-800">
                 相似度检测完成 ✅
               </div>
