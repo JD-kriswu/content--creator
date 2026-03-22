@@ -37,6 +37,11 @@ describe('parseSSELine', () => {
     expect(result).toEqual({ type: 'complete', scriptId: 42 })
   })
 
+  it('parses error event', () => {
+    const result = parseSSELine('data: {"type":"error","message":"处理失败"}')
+    expect(result).toEqual({ type: 'error', message: '处理失败' })
+  })
+
   it('returns null for empty line', () => {
     expect(parseSSELine('')).toBeNull()
   })
