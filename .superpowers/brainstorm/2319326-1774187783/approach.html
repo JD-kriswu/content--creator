@@ -1,0 +1,46 @@
+<h2>迁移方案选择</h2>
+<p class="subtitle">选择 React 重构的实施路线</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>原地替换（推荐）</h3>
+      <p>删除 <code>frontend/</code> 内的 Vue 代码，在原目录创建 React 项目。build.sh 和 nginx 配置无需改动，dist 产物路径不变。</p>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>优点</h4><ul><li>构建/部署零改动</li><li>路径一致性好</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>无法快速回滚到 Vue</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>新目录 + 交换</h3>
+      <p>创建 <code>frontend-react/</code>，Vue 代码保留在 <code>frontend/</code>。新前端验证稳定后，更新 build.sh 指向新目录。</p>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>优点</h4><ul><li>旧代码保留，随时回滚</li><li>可并行对比</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>需要改 build.sh / nginx 路径</li><li>目录稍显冗余</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>两种方案共同的技术栈</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;">
+    <div style="background:#dbeafe;border-radius:8px;padding:10px;font-size:13px;">
+      <div style="font-weight:600;color:#1d4ed8;margin-bottom:4px;">核心框架</div>
+      React 18 + Vite + React Router 7
+    </div>
+    <div style="background:#ede9fe;border-radius:8px;padding:10px;font-size:13px;">
+      <div style="font-weight:600;color:#6d28d9;margin-bottom:4px;">UI 系统</div>
+      Tailwind CSS 4 + shadcn/ui（直接复用 assert/ 组件）
+    </div>
+    <div style="background:#f0fdf4;border-radius:8px;padding:10px;font-size:13px;">
+      <div style="font-weight:600;color:#15803d;margin-bottom:4px;">状态管理</div>
+      React Context（Auth）+ 组件 State（Chat/SSE）
+    </div>
+  </div>
+</div>

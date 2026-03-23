@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Send } from 'lucide-react'
+import { ArrowUp } from 'lucide-react'
 
 interface ChatInputProps {
   onSend: (message: string) => void
@@ -33,14 +33,14 @@ export function ChatInput({ onSend, placeholder = '输入你的需求...', disab
           placeholder={placeholder}
           disabled={disabled}
           rows={2}
-          className="w-full px-4 py-3 pr-12 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 dark:disabled:bg-gray-900 disabled:cursor-not-allowed text-sm"
+          className="w-full px-4 py-3 pr-14 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
         />
         <button
           onClick={handleSend}
           disabled={!input.trim() || disabled}
-          className="absolute bottom-2 right-2 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          className="absolute bottom-2 right-2 w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center hover:opacity-90 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <Send className="w-4 h-4 text-white" />
+          <ArrowUp className="w-4 h-4 text-white" strokeWidth={2.5} />
         </button>
       </div>
     </div>

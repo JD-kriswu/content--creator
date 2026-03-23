@@ -1,0 +1,80 @@
+<h2>「不在本次范围」在设计稿中的对应情况</h2>
+<p class="subtitle">所有条目在 assert/ 设计稿中均有完整实现，可以选择是否纳入本次范围</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;">
+
+    <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;font-size:12px;color:#15803d;margin-bottom:8px;">📄 /result/:id — 稿件结果页</div>
+      <div style="font-size:12px;color:#166534;line-height:1.7;">
+        <code style="background:#dcfce7;padding:1px 4px;border-radius:3px;font-size:11px;">assert/src/app/pages/Result.tsx</code><br>
+        • 相似度进度条展示<br>
+        • 稿件终稿展示区（只读）<br>
+        • 一键复制按钮<br>
+        • 👍👎 反馈功能<br>
+        • "继续创作"跳转
+      </div>
+    </div>
+
+    <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;font-size:12px;color:#15803d;margin-bottom:8px;">📋 /history — 历史记录独立页</div>
+      <div style="font-size:12px;color:#166534;line-height:1.7;">
+        <code style="background:#dcfce7;padding:1px 4px;border-radius:3px;font-size:11px;">assert/src/app/pages/History.tsx</code><br>
+        • 历史记录卡片列表<br>
+        • 相似度状态（通过/不通过）<br>
+        • 查看 / 删除 操作<br>
+        • 点击弹出详情 Dialog
+      </div>
+    </div>
+
+    <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;font-size:12px;color:#15803d;margin-bottom:8px;">📱 移动端适配</div>
+      <div style="font-size:12px;color:#166534;line-height:1.7;">
+        <code style="background:#dcfce7;padding:1px 4px;border-radius:3px;font-size:11px;">assert/src/app/components/Layout.tsx</code><br>
+        • 登录后底部导航栏（固定定位）<br>
+        • 首页 / 历史 / 账户 三个标签<br>
+        • <code>md:hidden</code> 响应式显示
+      </div>
+    </div>
+
+    <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;font-size:12px;color:#15803d;margin-bottom:8px;">🌙 暗色模式</div>
+      <div style="font-size:12px;color:#166534;line-height:1.7;">
+        <code style="background:#dcfce7;padding:1px 4px;border-radius:3px;font-size:11px;">assert/src/styles/theme.css</code><br>
+        • 完整 <code>.dark { }</code> CSS 变量定义<br>
+        • 背景、文字、卡片、侧边栏全套<br>
+        • 需配合 next-themes 切换
+      </div>
+    </div>
+
+    <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;font-size:12px;color:#15803d;margin-bottom:8px;">📝 大纲编辑（可编辑 textarea）</div>
+      <div style="font-size:12px;color:#166534;line-height:1.7;">
+        <code style="background:#dcfce7;padding:1px 4px;border-radius:3px;font-size:11px;">assert/src/app/components/create/OutlineEditor.tsx</code><br>
+        • 右侧显示大纲内容<br>
+        • <strong>可编辑</strong> textarea（用户可修改大纲）<br>
+        • 当前设计稿设定为可编辑
+      </div>
+    </div>
+
+    <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;font-size:12px;color:#15803d;margin-bottom:8px;">📱 手机号+验证码+微信登录</div>
+      <div style="font-size:12px;color:#166534;line-height:1.7;">
+        <code style="background:#dcfce7;padding:1px 4px;border-radius:3px;font-size:11px;">assert/src/app/pages/Auth.tsx</code><br>
+        • 手机号输入 + 获取验证码<br>
+        • 微信登录按钮<br>
+        • 登录/注册 Tabs<br>
+        • <span style="color:#dc2626;">⚠️ 后端无此接口，需后端扩展</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>结论</h3>
+  <p style="font-size:13px;color:#374151;margin-top:8px;line-height:1.7;">
+    设计稿中 6 项均有完整实现。其中前 5 项（Result页、History页、移动端、暗色模式、大纲可编辑）<strong>后端已有对应接口支持</strong>，可直接纳入范围。<br>
+    手机号/微信登录需要后端改动，维持排除在外。
+  </p>
+</div>

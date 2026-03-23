@@ -1,0 +1,88 @@
+<h2>前端重构设计方案总览</h2>
+<p class="subtitle">React 迁移 · 完整页面与组件结构</p>
+
+<div class="section">
+  <h3>页面路由结构</h3>
+  <div style="margin-top:12px;font-family:monospace;font-size:13px;background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:16px;line-height:1.8;">
+    <span style="color:#89b4fa;">/</span>                  → <span style="color:#a6e3a1;">Landing</span>（营销首页，未登录可见）<br>
+    <span style="color:#89b4fa;">/auth</span>              → <span style="color:#a6e3a1;">Auth</span>（邮箱+密码，新视觉）<br>
+    <span style="color:#89b4fa;">/dashboard</span>         → <span style="color:#a6e3a1;">Dashboard</span>（需登录，主创作区）<br>
+    <span style="color:#f38ba8;">*</span>                  → <span style="color:#fab387;">redirect → /</span>
+  </div>
+</div>
+
+<div class="section">
+  <h3>组件树</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
+
+    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <div style="background:#dbeafe;padding:8px 12px;font-weight:600;font-size:12px;color:#1d4ed8;">公开路由（Layout 包裹）</div>
+      <div style="padding:12px;font-size:12px;line-height:2;">
+        <div>📄 <strong>Home.tsx</strong> — Landing 营销页</div>
+        <div style="padding-left:16px;color:#6b7280;">Hero · 痛点卡片 · 数据统计 · CTA</div>
+        <div>🔐 <strong>Auth.tsx</strong> — 登录/注册</div>
+        <div style="padding-left:16px;color:#6b7280;">Tabs(登录/注册) · 邮箱+密码 · 表单验证</div>
+        <div>🧩 <strong>Layout.tsx</strong> — Header + Outlet</div>
+        <div style="padding-left:16px;color:#6b7280;">顶部导航 · 品牌logo · 登录状态</div>
+      </div>
+    </div>
+
+    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <div style="background:#dcfce7;padding:8px 12px;font-weight:600;font-size:12px;color:#15803d;">受保护路由（全屏，无 Layout）</div>
+      <div style="padding:12px;font-size:12px;line-height:2;">
+        <div>🏠 <strong>Dashboard.tsx</strong> — 主创作区</div>
+        <div style="padding-left:16px;color:#6b7280;">初始态: Sidebar + 居中输入框</div>
+        <div style="padding-left:16px;color:#6b7280;">创作态: Chat(2/5) + Preview(3/5)</div>
+        <div>📋 <strong>Sidebar.tsx</strong> — 侧边栏</div>
+        <div style="padding-left:16px;color:#6b7280;">新建对话 · 集成入口(开发中) · 历史列表</div>
+      </div>
+    </div>
+
+    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <div style="background:#fef3c7;padding:8px 12px;font-weight:600;font-size:12px;color:#92400e;">create/ 子组件</div>
+      <div style="padding:12px;font-size:12px;line-height:2;">
+        <div>💬 <strong>MessageList.tsx</strong> — SSE 消息渲染</div>
+        <div style="padding-left:16px;color:#6b7280;">token/step/info/outline/action/complete/error</div>
+        <div>⌨️ <strong>ChatInput.tsx</strong> — 底部输入框</div>
+        <div>⏳ <strong>LoadingState.tsx</strong> — 生成中动画</div>
+        <div>📝 <strong>OutlineEditor.tsx</strong> — 大纲编辑</div>
+        <div>📄 <strong>ScriptEditor.tsx</strong> — 稿件编辑+复制+导出</div>
+      </div>
+    </div>
+
+    <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <div style="background:#ede9fe;padding:8px 12px;font-weight:600;font-size:12px;color:#6d28d9;">基础设施</div>
+      <div style="padding:12px;font-size:12px;line-height:2;">
+        <div>🔑 <strong>AuthContext.tsx</strong> — token/user/login/logout</div>
+        <div>🌐 <strong>api/</strong> — auth · chat(SSE) · conversations</div>
+        <div>🛡️ <strong>ProtectedRoute</strong> — 未登录跳 /auth</div>
+        <div>🎨 <strong>ui/</strong> — 直接复用 assert/ 的 shadcn 组件</div>
+        <div style="padding-left:16px;color:#6b7280;">Button · Card · Input · Label · Tabs · Separator</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>SSE 消息处理（Dashboard 核心逻辑）</h3>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;margin-top:12px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <span style="background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:4px;font-family:monospace;">token</span>→ 追加流式文字
+      <span style="background:#dcfce7;color:#166534;padding:3px 8px;border-radius:4px;font-family:monospace;">step</span>→ 步骤指示器
+      <span style="background:#fef3c7;color:#92400e;padding:3px 8px;border-radius:4px;font-family:monospace;">outline</span>→ 右侧显示 OutlineEditor
+      <span style="background:#fce7f3;color:#9d174d;padding:3px 8px;border-radius:4px;font-family:monospace;">action</span>→ 按钮选项
+      <span style="background:#f0fdf4;color:#15803d;padding:3px 8px;border-radius:4px;font-family:monospace;">complete</span>→ 显示 ScriptEditor
+      <span style="background:#fef2f2;color:#dc2626;padding:3px 8px;border-radius:4px;font-family:monospace;">error</span>→ 错误提示
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>依赖包（对比 assert/package.json 精简）</h3>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;margin-top:12px;">
+    <div style="color:#15803d;margin-bottom:6px;font-weight:600;">✅ 保留</div>
+    <div style="font-family:monospace;color:#374151;margin-bottom:10px;">react · react-dom · react-router · @radix-ui/react-* · lucide-react · tailwindcss · clsx · class-variance-authority · tailwind-merge · sonner</div>
+    <div style="color:#dc2626;margin-bottom:6px;font-weight:600;">❌ 不引入（YAGNI）</div>
+    <div style="font-family:monospace;color:#6b7280;">react-dnd · react-hook-form · recharts · embla-carousel · motion · canvas-confetti · react-responsive-masonry</div>
+  </div>
+</div>

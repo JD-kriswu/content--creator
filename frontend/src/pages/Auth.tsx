@@ -54,7 +54,8 @@ export function Auth() {
   }
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="h-full overflow-y-auto flex items-center justify-center px-4 py-12">
+    <div className="w-full max-w-md">
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mb-4 shadow-xl shadow-blue-200">
           <Feather className="w-8 h-8 text-white" strokeWidth={2.5} />
@@ -130,6 +131,7 @@ export function Auth() {
           </TabsContent>
         </Tabs>
       </Card>
+    </div>
     </div>
   )
 }

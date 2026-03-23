@@ -15,7 +15,8 @@ import {
 
 export function Home() {
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="h-full overflow-y-auto">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Hero Section - 第一屏 */}
       <div className="grid lg:grid-cols-2 gap-12 items-center mb-24">
         <div>
@@ -373,6 +374,7 @@ export function Home() {
       <div className="mt-12 text-center text-sm text-gray-500">
         <p>专为内容创作者打造 • 支持中英文 • 智能学习你的风格</p>
       </div>
+    </div>
     </div>
   );
 }

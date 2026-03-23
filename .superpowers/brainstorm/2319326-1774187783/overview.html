@@ -1,0 +1,117 @@
+<h2>前端重构方案对比</h2>
+<p class="subtitle">当前 Vue 前端 vs Figma 新设计的主要变化</p>
+
+<div class="section">
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">🔴 当前前端（Vue 3 + Element Plus）</div>
+      <div class="mockup-body" style="padding:12px;font-size:13px;">
+        <div style="background:#7c3aed;color:white;padding:8px 12px;border-radius:6px 6px 0 0;font-weight:600;font-size:12px;">🎙 口播稿助手 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 用户名 [退出]</div>
+        <div style="display:flex;height:300px;border:1px solid #e5e7eb;border-top:none;">
+          <div style="width:120px;background:#faf5ff;border-right:1px solid #f0abfc;padding:8px;font-size:11px;">
+            <div style="background:#c026d3;color:white;padding:4px 8px;border-radius:4px;margin-bottom:8px;text-align:center;font-size:11px;">+ 新建</div>
+            <div style="color:#6b7280;font-size:11px;margin-bottom:4px;padding:0 4px;">📋 会话 &nbsp; 📄 稿件</div>
+            <div style="background:#f3e8ff;padding:4px 8px;border-radius:4px;font-size:10px;margin-bottom:2px;">如何在30天内...</div>
+            <div style="padding:4px 8px;font-size:10px;color:#6b7280;margin-bottom:2px;">小红书爆款文案...</div>
+            <div style="padding:4px 8px;font-size:10px;color:#6b7280;">5分钟学会...</div>
+          </div>
+          <div style="flex:1;padding:12px;background:white;">
+            <div style="background:#f9f0ff;border:1px solid #f0abfc;border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;">
+              <span style="color:#7c3aed;">🤖 AI：</span> 好的，我已收到参考文案...
+            </div>
+            <div style="background:#7c3aed;color:white;border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;max-width:80%;margin-left:auto;">
+              用户消息内容
+            </div>
+            <div style="position:absolute;bottom:20px;left:150px;right:20px;border:1px solid #e5e7eb;border-radius:8px;padding:8px;background:white;font-size:11px;color:#9ca3af;">输入消息...</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#6b7280;">
+          <span style="background:#fce7f3;color:#c026d3;padding:2px 6px;border-radius:4px;">Element Plus UI</span>
+          <span style="background:#f3e8ff;color:#7c3aed;padding:2px 6px;border-radius:4px;margin-left:4px;">紫色主题</span>
+          <span style="background:#f0fdf4;color:#16a34a;padding:2px 6px;border-radius:4px;margin-left:4px;">2栏布局</span>
+        </div>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">🟢 新设计（Figma · 轻写Claw）</div>
+      <div class="mockup-body" style="padding:12px;font-size:13px;">
+        <!-- Header -->
+        <div style="background:white;border-bottom:1px solid #e5e7eb;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:20px;height:20px;background:linear-gradient(135deg,#3b82f6,#7c3aed);border-radius:6px;"></div>
+            <span style="font-weight:600;background:linear-gradient(to right,#2563eb,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:13px;">轻写Claw</span>
+          </div>
+          <div style="font-size:11px;color:#6b7280;">首页 历史 <span style="background:linear-gradient(to right,#2563eb,#7c3aed);color:white;padding:3px 8px;border-radius:4px;font-size:10px;">免费试用</span></div>
+        </div>
+        <!-- Dashboard 3-panel -->
+        <div style="display:flex;height:300px;border:1px solid #e5e7eb;border-top:none;">
+          <!-- Left sidebar -->
+          <div style="width:100px;background:#f9fafb;border-right:1px solid #e5e7eb;padding:6px;font-size:10px;">
+            <div style="border:1px solid #e5e7eb;background:white;padding:4px;border-radius:4px;text-align:center;margin-bottom:6px;font-size:10px;">+ 新建对话</div>
+            <div style="font-size:9px;color:#9ca3af;margin-bottom:3px;padding:0 2px;">配置到飞书 <span style="background:#f3f4f6;padding:1px 3px;border-radius:2px;">开发中</span></div>
+            <div style="font-size:9px;color:#9ca3af;margin-bottom:6px;padding:0 2px;">配置到钉钉 <span style="background:#f3f4f6;padding:1px 3px;border-radius:2px;">开发中</span></div>
+            <div style="font-size:9px;color:#6b7280;margin-bottom:2px;">所有记录</div>
+            <div style="background:white;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:3px 5px;border-radius:3px;font-size:9px;margin-bottom:1px;">如何在30天...</div>
+            <div style="padding:3px 5px;font-size:9px;color:#9ca3af;">小红书爆款...</div>
+          </div>
+          <!-- Chat panel (2/5) -->
+          <div style="width:140px;border-right:1px solid #e5e7eb;padding:8px;background:white;">
+            <div style="font-size:9px;color:#6b7280;background:#dbeafe;border:1px solid #bfdbfe;border-radius:4px;padding:4px 6px;margin-bottom:6px;">
+              🤖 好的！我已经收到你的参考文案...
+            </div>
+            <div style="font-size:9px;background:linear-gradient(to br,#3b82f6,#7c3aed);color:white;border-radius:4px;padding:4px 6px;margin-bottom:6px;max-width:80%;margin-left:auto;">
+              参考文案内容
+            </div>
+            <div style="border:1px solid #e5e7eb;border-radius:6px;padding:4px;font-size:9px;color:#9ca3af;margin-top:auto;">随时告诉我你的想法...</div>
+          </div>
+          <!-- Right preview panel (3/5) -->
+          <div style="flex:1;padding:8px;background:#fafafa;">
+            <div style="font-size:10px;font-weight:600;margin-bottom:6px;color:#374151;">完整口播稿</div>
+            <div style="display:flex;gap:4px;margin-bottom:6px;">
+              <button style="font-size:9px;border:1px solid #e5e7eb;background:white;padding:2px 6px;border-radius:4px;">复制</button>
+              <button style="font-size:9px;border:1px solid #e5e7eb;background:white;padding:2px 6px;border-radius:4px;">导出</button>
+              <button style="font-size:9px;border:1px solid #dbeafe;background:#eff6ff;color:#2563eb;padding:2px 6px;border-radius:4px;">重新生成</button>
+            </div>
+            <div style="background:white;border:1px solid #e5e7eb;border-radius:4px;padding:6px;font-size:9px;color:#374151;line-height:1.5;">
+              你是不是也经历过这样的困境？每天花费大量时间写文案，却总是得不到理想的效果？<br><br>
+              现在，轻写Claw 来帮你解决这个问题！...
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#6b7280;">
+          <span style="background:#dbeafe;color:#2563eb;padding:2px 6px;border-radius:4px;">Tailwind CSS</span>
+          <span style="background:#ede9fe;color:#6d28d9;padding:2px 6px;border-radius:4px;margin-left:4px;">蓝紫渐变</span>
+          <span style="background:#f0fdf4;color:#16a34a;padding:2px 6px;border-radius:4px;margin-left:4px;">3栏布局</span>
+          <span style="background:#fff7ed;color:#ea580c;padding:2px 6px;border-radius:4px;margin-left:4px;">Landing页</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>主要变化清单</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px;">
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;color:#15803d;margin-bottom:8px;">✅ 视觉/交互升级</div>
+      <ul style="font-size:13px;color:#166534;margin:0;padding-left:16px;line-height:2;">
+        <li>新 Landing 首页（营销内容）</li>
+        <li>品牌名改为「轻写Claw」</li>
+        <li>蓝紫渐变取代纯紫色</li>
+        <li>Dashboard 左中右三栏</li>
+        <li>右侧大纲/稿件预览编辑区</li>
+        <li>侧边栏增加集成入口（开发中）</li>
+        <li>顶部 Header 导航</li>
+      </ul>
+    </div>
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px;">
+      <div style="font-weight:600;color:#c2410c;margin-bottom:8px;">⚠️ 需要决策的问题</div>
+      <ul style="font-size:13px;color:#7c2d12;margin:0;padding-left:16px;line-height:2;">
+        <li>框架：继续 Vue 3，还是迁移到 React？</li>
+        <li>认证：新设计用手机号+验证码，后端只支持邮箱+密码</li>
+        <li>Landing 页是否需要（App 已有认证守卫）</li>
+        <li>UI 库：Element Plus → Tailwind + shadcn-vue？</li>
+      </ul>
+    </div>
+  </div>
+</div>

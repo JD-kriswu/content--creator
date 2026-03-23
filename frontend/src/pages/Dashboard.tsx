@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useReducer } from 'react'
-import { ArrowUp, Sparkles } from 'lucide-react'
+import { ArrowUp, ArrowLeft, Plus, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Sidebar } from '../components/Sidebar'
 import { MessageList, type ChatMsg } from '../components/create/MessageList'
@@ -9,7 +9,42 @@ import { OutlineEditor } from '../components/create/OutlineEditor'
 import { ScriptEditor } from '../components/create/ScriptEditor'
 import { sendMessage, resetSession } from '../api/chat'
 import { getConversation, type Conversation } from '../api/conversations'
+import { getScript } from '../api/scripts'
 import { parseSSELine } from '../lib/sse'
+
+function formatOutline(data: unknown): string {
+  if (!data || typeof data !== 'object') return JSON.stringify(data, null, 2)
+  const d = data as Record<string, unknown>
+  const lines: string[] = []
+
+  if (Array.isArray(d.elements) && d.elements.length > 0) {
+    lines.push('【爆款元素】')
+    ;(d.elements as string[]).forEach((e, i) => lines.push(`  ${i + 1}. ${e}`))
+    lines.push('')
+  }
+
+  if (Array.isArray(d.outline) && d.outline.length > 0) {
+    lines.push('【内容大纲】')
+    ;(d.outline as Array<{ part?: string; duration?: string; content?: string; emotion?: string }>).forEach((o) => {
+      lines.push(`  ${o.part ?? ''}（${o.duration ?? ''}）`)
+      if (o.content) lines.push(`    内容：${o.content}`)
+      if (o.emotion) lines.push(`    情绪：${o.emotion}`)
+    })
+    lines.push('')
+  }
+
+  if (d.strategy) {
+    lines.push('【创作策略】')
+    lines.push(`  ${d.strategy}`)
+    lines.push('')
+  }
+
+  if (d.estimated_similarity) {
+    lines.push(`【预估相似度】${d.estimated_similarity}`)
+  }
+
+  return lines.join('\n').trim()
+}
 
 type Stage = 'idle' | 'analyzing' | 'awaiting' | 'writing' | 'complete'
 
@@ -50,10 +85,25 @@ function reducer(state: DashState, action: Action): DashState {
     case 'APPEND_TOKEN': {
       const msgs = [...state.messages]
       const last = msgs[msgs.length - 1]
+      const QUALITY_MARKER = '---QUALITY_CHECK_START---'
+      const OUTLINE_START = '---OUTLINE_START---'
+      const OUTLINE_END = '---OUTLINE_END---'
+      let newContent = (last?.streaming ? (last.content ?? '') : '') + action.content
+      // Strip inline outline block
+      const osIdx = newContent.indexOf(OUTLINE_START)
+      if (osIdx !== -1) {
+        const oeIdx = newContent.indexOf(OUTLINE_END)
+        newContent = oeIdx !== -1
+          ? (newContent.slice(0, osIdx) + newContent.slice(oeIdx + OUTLINE_END.length)).trimStart()
+          : newContent.slice(0, osIdx)
+      }
+      // Strip quality check section
+      const markerIdx = newContent.indexOf(QUALITY_MARKER)
+      if (markerIdx !== -1) newContent = newContent.slice(0, markerIdx)
       if (last?.streaming) {
-        msgs[msgs.length - 1] = { ...last, content: (last.content ?? '') + action.content }
+        msgs[msgs.length - 1] = { ...last, content: newContent }
       } else {
-        msgs.push({ id: `${Date.now()}-t`, type: 'ai', content: action.content, streaming: true })
+        msgs.push({ id: `${Date.now()}-t`, type: 'ai', content: newContent, streaming: true })
       }
       return { ...state, messages: msgs }
     }
@@ -127,7 +177,8 @@ export function Dashboard() {
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-i`, type: 'info', content: event.content } })
               break
             case 'outline':
-              dispatch({ type: 'SET_OUTLINE', text: JSON.stringify(event.data, null, 2) })
+              dispatch({ type: 'SET_OUTLINE', text: formatOutline(event.data) })
+              dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-o`, type: 'outline', data: event.data } })
               break
             case 'action':
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-a`, type: 'action', options: event.options } })
@@ -135,10 +186,16 @@ export function Dashboard() {
             case 'similarity':
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-sim`, type: 'similarity', data: event.data } })
               break
-            case 'complete':
-              dispatch({ type: 'SET_SCRIPT', text: streamingTextRef.current, scriptId: event.scriptId })
+            case 'complete': {
+              const QUALITY_MARKER = '---QUALITY_CHECK_START---'
+              const idx = streamingTextRef.current.indexOf(QUALITY_MARKER)
+              const cleanText = idx !== -1
+                ? streamingTextRef.current.slice(0, idx).trimEnd()
+                : streamingTextRef.current
+              dispatch({ type: 'SET_SCRIPT', text: cleanText, scriptId: event.scriptId })
               setRefreshTrigger((n) => n + 1)
               break
+            }
             case 'error':
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-e`, type: 'error', content: event.message } })
               dispatch({ type: 'SET_STAGE', stage: 'idle' })
@@ -180,17 +237,56 @@ export function Dashboard() {
   const handleSelectConversation = async (conv: Conversation) => {
     try {
       const data = await getConversation(conv.id)
-      const stored = JSON.parse(data.messages || '[]') as Array<{ role: string; type: string; content?: string; data?: unknown; options?: string[] }>
-      const msgs: ChatMsg[] = stored.map((m, i) => ({
-        id: `restore-${i}`,
-        type: m.role === 'user' ? 'user' : (m.type === 'action' ? 'action' : m.type === 'error' ? 'error' : m.type === 'step' ? 'step' : m.type === 'info' ? 'info' : 'ai') as ChatMsg['type'],
-        content: m.content,
-        options: m.options,
-        data: m.data,
-      }))
-      const stage: Stage = conv.state === 1 ? 'complete' : 'idle'
+      const stored = JSON.parse(data.messages || '[]') as Array<{
+        role: string; type: string; content?: string; data?: unknown;
+        options?: string[]; step?: number; name?: string
+      }>
+      const QUALITY_MARKER = '---QUALITY_CHECK_START---'
+      // Skip meta messages (outline/complete) that have no visible chat content
+      const msgs: ChatMsg[] = stored
+        .filter(m => m.type !== 'complete')
+        .map((m, i) => {
+          let content: string | undefined
+          if (m.type === 'step') {
+            content = `Step ${m.step}：${m.name}`
+          } else if (m.content) {
+            const idx = m.content.indexOf(QUALITY_MARKER)
+            content = idx !== -1 ? m.content.slice(0, idx).trimEnd() : m.content
+          }
+          return {
+            id: `restore-${i}`,
+            type: (m.role === 'user' ? 'user'
+              : m.type === 'action' ? 'action'
+              : m.type === 'error' ? 'error'
+              : m.type === 'step' ? 'step'
+              : m.type === 'info' ? 'info'
+              : m.type === 'similarity' ? 'similarity'
+              : m.type === 'outline' ? 'outline'
+              : 'ai') as ChatMsg['type'],
+            content,
+            options: m.options,
+            data: m.data,
+          }
+        })
+
+      const fullConv = data.conversation
+      const stage: Stage = fullConv.state === 1 ? 'complete' : 'idle'
       dispatch({ type: 'RESTORE', messages: msgs, stage })
       setActiveConvId(conv.id)
+
+      // Restore outline for awaiting state
+      const outlineMsg = stored.find(m => m.type === 'outline')
+      if (outlineMsg?.data && fullConv.state !== 1) {
+        dispatch({ type: 'SET_OUTLINE', text: formatOutline(outlineMsg.data) })
+      }
+
+      // Load script for completed state
+      if (fullConv.state === 1 && fullConv.script_id) {
+        try {
+          const scriptData = await getScript(fullConv.script_id)
+          dispatch({ type: 'SET_SCRIPT', text: scriptData.content, scriptId: fullConv.script_id })
+        } catch { /* script load failed */ }
+      }
     } catch { toast.error('加载会话失败') }
   }
 
@@ -206,7 +302,7 @@ export function Dashboard() {
   // Idle state: sidebar + centered textarea
   if (state.stage === 'idle') {
     return (
-      <div className="h-screen flex overflow-hidden">
+      <div className="h-full flex overflow-hidden">
         <Sidebar
           onNewChat={handleNewChat}
           onSelectConversation={handleSelectConversation}
@@ -214,29 +310,29 @@ export function Dashboard() {
           activeConvId={activeConvId}
           refreshTrigger={refreshTrigger}
         />
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-950">
+        <div className="flex-1 overflow-y-auto bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
           <div className="max-w-3xl mx-auto px-4 pt-16">
             <div className="text-center mb-8">
               <h1 className="text-4xl sm:text-5xl font-medium mb-3 text-gray-900 dark:text-gray-100">
                 Hi，今天想创作什么爆款文案？
               </h1>
               <p className="text-lg text-gray-500 dark:text-gray-400 mb-4">粘贴你的参考口播稿，AI 会学习风格并为你创作</p>
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 rounded-full border border-blue-200 dark:border-blue-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-gray-800/70 rounded-full border border-blue-200 dark:border-blue-800 shadow-sm">
                 <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm font-medium text-blue-900 dark:text-blue-300">越用越懂你</span>
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">越用越懂你</span>
               </div>
             </div>
-            <div className="relative mb-4">
+            <div className="relative mb-4 shadow-lg rounded-2xl">
               <textarea
                 value={initialInput}
                 onChange={(e) => setInitialInput(e.target.value)}
                 placeholder="粘贴你喜欢的爆款口播稿..."
-                className="w-full h-[200px] p-6 pr-20 pb-16 text-base border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full h-[200px] p-6 pr-6 pb-16 text-base border-0 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
               />
               <button
                 onClick={handleInitialCreate}
                 disabled={!initialInput.trim() || initialInput.length < 10}
-                className="absolute bottom-4 right-4 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-105 hover:shadow-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="absolute bottom-4 right-4 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg hover:scale-105 hover:shadow-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 <ArrowUp className="w-5 h-5 text-white" strokeWidth={2.5} />
               </button>
@@ -253,9 +349,25 @@ export function Dashboard() {
 
   // Chat state: left chat panel + right preview (no sidebar)
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-full flex overflow-hidden">
       {/* Left: chat panel 2/5 */}
       <div className="w-full md:w-2/5 border-r border-gray-200 dark:border-gray-800 flex flex-col bg-white dark:bg-gray-950">
+        {/* Top toolbar */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+          <button
+            onClick={() => dispatch({ type: 'RESET' })}
+            className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleNewChat}
+            className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New</span>
+          </button>
+        </div>
         <MessageList
           messages={state.messages}
           onAction={handleAction}

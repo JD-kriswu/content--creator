@@ -18,11 +18,14 @@ export function History() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="p-8 text-center text-gray-500">加载中...</div>
+  if (loading) return (
+    <div className="h-full overflow-y-auto flex items-center justify-center text-gray-500">加载中...</div>
+  )
 
   if (conversations.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-16">
+      <div className="h-full overflow-y-auto">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 text-center py-16">
         <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
           <FileText className="w-10 h-10 text-gray-400" />
         </div>
@@ -35,11 +38,13 @@ export function History() {
           开始创作
         </Button>
       </div>
+      </div>
     )
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="h-full overflow-y-auto">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-semibold mb-2 text-gray-900 dark:text-gray-100">历史记录</h1>
         <p className="text-gray-600 dark:text-gray-400">共 {conversations.length} 条会话记录</p>
@@ -93,6 +98,7 @@ export function History() {
           </Card>
         ))}
       </div>
+    </div>
     </div>
   )
 }

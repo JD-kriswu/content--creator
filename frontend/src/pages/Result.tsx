@@ -48,7 +48,9 @@ export function Result() {
     toast.success(next === 'like' ? '感谢反馈！' : next === 'dislike' ? '我们会持续改进' : '已取消反馈')
   }
 
-  if (loading) return <div className="p-8 text-center text-gray-500">加载中...</div>
+  if (loading) return (
+    <div className="h-full overflow-y-auto flex items-center justify-center text-gray-500">加载中...</div>
+  )
 
   const passed = similarity !== null && similarity < 30
   const statusColor = passed ? 'text-green-600' : 'text-red-600'
@@ -56,7 +58,8 @@ export function Result() {
   const statusBorder = passed ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="h-full overflow-y-auto">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 -ml-2">
         <ArrowLeft className="w-4 h-4 mr-2" />返回
       </Button>
@@ -125,6 +128,7 @@ export function Result() {
           <Feather className="w-5 h-5 mr-2" />继续创作
         </Button>
       </Card>
+    </div>
     </div>
   )
 }
