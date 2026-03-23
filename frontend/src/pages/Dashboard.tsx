@@ -290,10 +290,6 @@ export function Dashboard() {
     } catch { toast.error('加载会话失败') }
   }
 
-  const handleSelectScript = (content: string, _title: string) => {
-    dispatch({ type: 'SET_SCRIPT', text: content, scriptId: null })
-  }
-
   const handleAction = useCallback((option: string) => {
     dispatch({ type: 'SET_STAGE', stage: 'writing' })
     handleSend(option)
@@ -306,7 +302,6 @@ export function Dashboard() {
         <Sidebar
           onNewChat={handleNewChat}
           onSelectConversation={handleSelectConversation}
-          onSelectScript={handleSelectScript}
           activeConvId={activeConvId}
           refreshTrigger={refreshTrigger}
         />
@@ -327,7 +322,7 @@ export function Dashboard() {
                 value={initialInput}
                 onChange={(e) => setInitialInput(e.target.value)}
                 placeholder="粘贴你喜欢的爆款口播稿..."
-                className="w-full h-[200px] p-6 pr-6 pb-16 text-base border-0 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full h-[200px] p-6 pr-6 pb-16 text-base border-0 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-2xl resize-none focus:outline-none transition-all"
               />
               <button
                 onClick={handleInitialCreate}
@@ -349,9 +344,9 @@ export function Dashboard() {
 
   // Chat state: left chat panel + right preview (no sidebar)
   return (
-    <div className="h-full flex overflow-hidden">
-      {/* Left: chat panel 2/5 */}
-      <div className="w-full md:w-2/5 border-r border-gray-200 dark:border-gray-800 flex flex-col bg-white dark:bg-gray-950">
+    <div className="h-full flex overflow-hidden bg-gray-100 dark:bg-gray-950 gap-4 p-4">
+      {/* Left: chat panel */}
+      <div className="w-full md:w-1/3 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
         {/* Top toolbar */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
           <button
@@ -381,8 +376,8 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Right: preview panel 3/5 (desktop only) */}
-      <div className="hidden md:flex md:w-3/5 h-full">
+      {/* Right: preview panel */}
+      <div className="hidden md:flex md:w-3/5 h-full bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
         {(state.stage === 'analyzing' || state.stage === 'writing') && (
           <LoadingState message={state.stage === 'analyzing' ? '正在分析并生成大纲...' : '正在创作爆款口播稿...'} />
         )}

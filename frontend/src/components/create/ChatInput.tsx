@@ -33,7 +33,7 @@ export function ChatInput({ onSend, placeholder = '输入你的需求...', disab
           placeholder={placeholder}
           disabled={disabled}
           rows={2}
-          className="w-full px-4 py-3 pr-14 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          className="w-full px-4 py-3 pr-14 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed text-sm"
         />
         <button
           onClick={handleSend}
