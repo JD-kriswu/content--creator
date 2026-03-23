@@ -21,3 +21,4 @@ frontend/dist/
 .DS_Store
 .my.cnf*
 .mysql*
+.worktrees/
