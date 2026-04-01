@@ -1,12 +1,16 @@
+import { useEffect, useRef } from 'react'
 import { Bot } from 'lucide-react'
+import { ParallelStageView, type WorkerStream } from './ParallelStageView'
 
 export interface ChatMsg {
   id: string
-  type: 'user' | 'ai' | 'step' | 'info' | 'action' | 'similarity' | 'error' | 'outline'
+  type: 'user' | 'ai' | 'step' | 'info' | 'action' | 'similarity' | 'error' | 'outline' | 'parallel_stage'
   content?: string
   options?: string[]        // for action type
   data?: unknown            // for outline/similarity
   streaming?: boolean
+  workers?: WorkerStream[]  // for parallel_stage type
+  synthContent?: string     // for parallel_stage type
 }
 
 interface OutlineData {
@@ -79,8 +83,16 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, onAction, disabled }: MessageListProps) {
+  const listRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll when messages change or when streaming content updates
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+    <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-3">
       {messages.map((msg) => (
         <div
           key={msg.id}
@@ -151,9 +163,19 @@ export function MessageList({ messages, onAction, disabled }: MessageListProps) 
                 相似度检测完成 ✅
               </div>
             )}
+
+            {msg.type === 'parallel_stage' && msg.workers && (
+              <ParallelStageView
+                stageName={msg.content ?? ''}
+                workers={msg.workers}
+                synthContent={msg.synthContent}
+                synthStatus="done"
+              />
+            )}
           </div>
         </div>
       ))}
+      <div ref={bottomRef} />
     </div>
   )
 }

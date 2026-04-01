@@ -4,13 +4,15 @@ import { toast } from 'sonner'
 import { Sidebar } from '../components/Sidebar'
 import { MessageList, type ChatMsg } from '../components/create/MessageList'
 import { ChatInput } from '../components/create/ChatInput'
-import { LoadingState } from '../components/create/LoadingState'
 import { OutlineEditor } from '../components/create/OutlineEditor'
 import { ScriptEditor } from '../components/create/ScriptEditor'
 import { sendMessage, resetSession } from '../api/chat'
 import { getConversation, type Conversation } from '../api/conversations'
 import { getScript } from '../api/scripts'
 import { parseSSELine } from '../lib/sse'
+import type { WorkerStream } from '../components/create/ParallelStageView'
+import { getStyleDoc } from '../api/style'
+import { StyleInitBanner } from '../components/StyleInitBanner'
 
 function formatOutline(data: unknown): string {
   if (!data || typeof data !== 'object') return JSON.stringify(data, null, 2)
@@ -55,6 +57,12 @@ interface DashState {
   scriptText: string
   scriptId: number | null
   sending: boolean
+  currentStage: { id: string; name: string; type: string } | null
+  activeWorkers: Map<string, WorkerStream>
+  synthContent: string
+  synthStatus: 'idle' | 'running' | 'done'
+  currentStep: number
+  totalSteps: number
 }
 
 type Action =
@@ -68,11 +76,19 @@ type Action =
   | { type: 'STREAM_DONE' }
   | { type: 'RESTORE'; messages: ChatMsg[]; stage: Stage }
   | { type: 'UPDATE_OUTLINE'; text: string }
+  | { type: 'STAGE_START'; stage_id: string; stage_name: string; stage_type: string }
+  | { type: 'STAGE_DONE'; stage_id: string }
+  | { type: 'WORKER_START'; stage_id: string; worker_name: string; worker_display: string }
+  | { type: 'WORKER_TOKEN'; worker_name: string; content: string }
+  | { type: 'WORKER_DONE'; worker_name: string }
+  | { type: 'SYNTH_START' }
+  | { type: 'SYNTH_TOKEN'; content: string }
+  | { type: 'SYNTH_DONE' }
 
 function reducer(state: DashState, action: Action): DashState {
   switch (action.type) {
     case 'RESET':
-      return { stage: 'idle', messages: [], outlineText: '', scriptText: '', scriptId: null, sending: false }
+      return { stage: 'idle', messages: [], outlineText: '', scriptText: '', scriptId: null, sending: false, currentStage: null, activeWorkers: new Map(), synthContent: '', synthStatus: 'idle', currentStep: 0, totalSteps: 0 }
     case 'SEND':
       return {
         ...state,
@@ -121,6 +137,61 @@ function reducer(state: DashState, action: Action): DashState {
       return { ...state, messages: action.messages, stage: action.stage, sending: false }
     case 'UPDATE_OUTLINE':
       return { ...state, outlineText: action.text }
+    case 'STAGE_START':
+      return {
+        ...state,
+        currentStage: { id: action.stage_id, name: action.stage_name, type: action.stage_type },
+        activeWorkers: new Map(),
+        synthContent: '',
+        synthStatus: 'idle',
+        currentStep: state.currentStep + 1,
+      }
+    case 'STAGE_DONE': {
+      if (state.currentStage?.type === 'parallel') {
+        const workers = Array.from(state.activeWorkers.values())
+        const msg: ChatMsg = {
+          id: `${Date.now()}-ps`,
+          type: 'parallel_stage',
+          content: state.currentStage.name,
+          workers,
+          synthContent: state.synthContent,
+        }
+        return { ...state, messages: [...state.messages, msg], currentStage: null }
+      }
+      return { ...state, currentStage: null }
+    }
+    case 'WORKER_START': {
+      const newWorkers = new Map(state.activeWorkers)
+      newWorkers.set(action.worker_name, {
+        name: action.worker_name,
+        displayName: action.worker_display,
+        content: '',
+        status: 'running',
+      })
+      return { ...state, activeWorkers: newWorkers }
+    }
+    case 'WORKER_TOKEN': {
+      const newWorkers = new Map(state.activeWorkers)
+      const worker = newWorkers.get(action.worker_name)
+      if (worker) {
+        newWorkers.set(action.worker_name, { ...worker, content: worker.content + action.content })
+      }
+      return { ...state, activeWorkers: newWorkers }
+    }
+    case 'WORKER_DONE': {
+      const newWorkers = new Map(state.activeWorkers)
+      const worker = newWorkers.get(action.worker_name)
+      if (worker) {
+        newWorkers.set(action.worker_name, { ...worker, status: 'done' })
+      }
+      return { ...state, activeWorkers: newWorkers }
+    }
+    case 'SYNTH_START':
+      return { ...state, synthStatus: 'running', synthContent: '' }
+    case 'SYNTH_TOKEN':
+      return { ...state, synthContent: state.synthContent + action.content }
+    case 'SYNTH_DONE':
+      return { ...state, synthStatus: 'done' }
     default:
       return state
   }
@@ -129,21 +200,26 @@ function reducer(state: DashState, action: Action): DashState {
 export function Dashboard() {
   const [state, dispatch] = useReducer(reducer, {
     stage: 'idle', messages: [], outlineText: '', scriptText: '', scriptId: null, sending: false,
+    currentStage: null, activeWorkers: new Map(), synthContent: '', synthStatus: 'idle', currentStep: 0, totalSteps: 0,
   })
   const [initialInput, setInitialInput] = useState('')
   const [activeConvId, setActiveConvId] = useState<number | undefined>()
   const [refreshTrigger, setRefreshTrigger] = useState(0)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [styleInitialized, setStyleInitialized] = useState<boolean | null>(null)
   const streamingTextRef = useRef('')  // accumulate token content for ScriptEditor
+  const currentStageTypeRef = useRef<string | null>(null)  // track stage type for serial worker_token → APPEND_TOKEN
 
+  // Check style initialization on mount
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [state.messages])
+    getStyleDoc()
+      .then((doc) => setStyleInitialized(doc.is_initialized))
+      .catch(() => setStyleInitialized(false))
+  }, [])
 
-  const runSSE = useCallback(async (message: string) => {
+  const runSSE = useCallback(async (message: string, convId?: number) => {
     streamingTextRef.current = ''
     try {
-      const res = await sendMessage(message)
+      const res = await sendMessage(message, convId)
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '请求失败' }))
         dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}`, type: 'error', content: (err as { error?: string }).error ?? '请求失败' } })
@@ -186,6 +262,11 @@ export function Dashboard() {
             case 'similarity':
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-sim`, type: 'similarity', data: event.data } })
               break
+            case 'final_draft':
+              // Quality gate retried and produced a better draft — replace streamed content
+              streamingTextRef.current = event.content
+              dispatch({ type: 'SET_SCRIPT', text: event.content, scriptId: null })
+              break
             case 'complete': {
               const QUALITY_MARKER = '---QUALITY_CHECK_START---'
               const idx = streamingTextRef.current.indexOf(QUALITY_MARKER)
@@ -198,7 +279,36 @@ export function Dashboard() {
             }
             case 'error':
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-e`, type: 'error', content: event.message } })
-              dispatch({ type: 'SET_STAGE', stage: 'idle' })
+              break
+            case 'stage_start':
+              currentStageTypeRef.current = event.stage_type
+              dispatch({ type: 'STAGE_START', stage_id: event.stage_id, stage_name: event.stage_name, stage_type: event.stage_type })
+              break
+            case 'stage_done':
+              currentStageTypeRef.current = null
+              dispatch({ type: 'STAGE_DONE', stage_id: event.stage_id })
+              break
+            case 'worker_start':
+              dispatch({ type: 'WORKER_START', stage_id: event.stage_id, worker_name: event.worker_name, worker_display: event.worker_display })
+              break
+            case 'worker_token':
+              dispatch({ type: 'WORKER_TOKEN', worker_name: event.worker_name, content: event.content })
+              if (currentStageTypeRef.current === 'serial') {
+                streamingTextRef.current += event.content
+                dispatch({ type: 'APPEND_TOKEN', content: event.content })
+              }
+              break
+            case 'worker_done':
+              dispatch({ type: 'WORKER_DONE', worker_name: event.worker_name })
+              break
+            case 'synth_start':
+              dispatch({ type: 'SYNTH_START' })
+              break
+            case 'synth_token':
+              dispatch({ type: 'SYNTH_TOKEN', content: event.content })
+              break
+            case 'synth_done':
+              dispatch({ type: 'SYNTH_DONE' })
               break
           }
         }
@@ -215,8 +325,8 @@ export function Dashboard() {
   const handleSend = useCallback(async (text: string) => {
     if (state.sending) return
     dispatch({ type: 'SEND', text })
-    await runSSE(text)
-  }, [state.sending, runSSE])
+    await runSSE(text, activeConvId)
+  }, [state.sending, runSSE, activeConvId])
 
   const handleInitialCreate = () => {
     if (!initialInput.trim() || initialInput.length < 10) return
@@ -306,6 +416,9 @@ export function Dashboard() {
           refreshTrigger={refreshTrigger}
         />
         <div className="flex-1 overflow-y-auto bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+          {styleInitialized === false && (
+            <StyleInitBanner onInitialized={() => setStyleInitialized(true)} />
+          )}
           <div className="max-w-3xl mx-auto px-4 pt-16">
             <div className="text-center mb-8">
               <h1 className="text-4xl sm:text-5xl font-medium mb-3 text-gray-900 dark:text-gray-100">
@@ -346,7 +459,7 @@ export function Dashboard() {
   return (
     <div className="h-full flex overflow-hidden bg-gray-100 dark:bg-gray-950 gap-4 p-4">
       {/* Left: chat panel */}
-      <div className="w-full md:w-1/3 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+      <div className="w-full md:w-2/5 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
         {/* Top toolbar */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
           <button
@@ -368,7 +481,6 @@ export function Dashboard() {
           onAction={handleAction}
           disabled={state.sending}
         />
-        <div ref={messagesEndRef} />
         <ChatInput
           onSend={handleSend}
           placeholder="随时告诉我你的想法..."
@@ -377,10 +489,7 @@ export function Dashboard() {
       </div>
 
       {/* Right: preview panel */}
-      <div className="hidden md:flex md:w-3/5 h-full bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
-        {(state.stage === 'analyzing' || state.stage === 'writing') && (
-          <LoadingState message={state.stage === 'analyzing' ? '正在分析并生成大纲...' : '正在创作爆款口播稿...'} />
-        )}
+      <div className="hidden md:flex md:flex-1 h-full bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
         {state.stage === 'awaiting' && (
           <OutlineEditor
             content={state.outlineText}
