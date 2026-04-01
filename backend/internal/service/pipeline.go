@@ -51,21 +51,22 @@ type StoredMsg struct {
 }
 
 type ChatSession struct {
-	ID             string
-	UserID         uint
-	State          SessionState
-	StateChangedAt time.Time
-	ConvID         uint          // current Conversation DB id
-	StoredMsgs     []StoredMsg   // accumulated messages for persistence
-	OriginalText   string
-	SourceURL      string
-	AnalysisFull   string
-	OutlineJSON    string
-	OutlineData    *OutlineData
-	FinalDraft     string
-	UserNote       string
-	CreatedAt      time.Time
-	Mu             sync.Mutex
+	ID               string
+	UserID           uint
+	State            SessionState
+	StateChangedAt   time.Time
+	ConvID           uint          // current Conversation DB id
+	ActiveWorkflowID uint          // non-zero when a workflow is running/paused
+	StoredMsgs       []StoredMsg   // accumulated messages for persistence
+	OriginalText     string
+	SourceURL        string
+	AnalysisFull     string
+	OutlineJSON      string
+	OutlineData      *OutlineData
+	FinalDraft       string
+	UserNote         string
+	CreatedAt        time.Time
+	Mu               sync.Mutex
 }
 
 func (s *ChatSession) SetState(state SessionState) {

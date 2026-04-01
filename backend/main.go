@@ -8,6 +8,7 @@ import (
 	"content-creator-imm/config"
 	"content-creator-imm/internal/db"
 	"content-creator-imm/internal/handler"
+	"content-creator-imm/internal/workflow"
 	"content-creator-imm/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,10 @@ func main() {
 		log.Fatalf("database init failed: %v", err)
 	}
 	log.Println("database connected")
+
+	// Initialize workflow loader (dev mode reloads YAML on every request)
+	wfLoader := workflow.NewLoader("workflows", true)
+	handler.SetWorkflowLoader(wfLoader)
 
 	if config.C.AnthropicKey == "" {
 		log.Println("⚠️  ANTHROPIC_API_KEY 未配置！请在 config.json 中设置 anthropic_api_key")
