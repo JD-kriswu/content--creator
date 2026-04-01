@@ -9,7 +9,9 @@ type Conversation struct {
 	Title     string    `gorm:"size:200" json:"title"`
 	Messages  string    `gorm:"type:longtext" json:"-"` // JSON array of StoredMsg
 	ScriptID  *uint     `json:"script_id,omitempty"`
-	State     int       `json:"state"` // 0=in_progress 1=completed
-	CreatedAt time.Time `json:"created_at"`
+	State        int       `json:"state"` // 0=in_progress 1=completed
+	WorkflowType string    `gorm:"size:64;index" json:"workflow_type,omitempty"`
+	WorkflowID   *uint     `json:"workflow_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

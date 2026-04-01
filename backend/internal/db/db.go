@@ -53,5 +53,8 @@ func Init() error {
 		&model.Script{},
 		&model.Conversation{},
 		&model.Message{},
+		&model.Workflow{},
+		&model.WorkflowStage{},
+		&model.WorkflowWorker{},
 	)
 }
