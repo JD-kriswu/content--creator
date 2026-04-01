@@ -55,3 +55,17 @@ func CreateWorkflowWorker(w *model.WorkflowWorker) error {
 func UpdateWorkflowWorker(w *model.WorkflowWorker) error {
 	return db.DB.Save(w).Error
 }
+
+// GetWorkflowStages returns all stages for a workflow, ordered by sequence.
+func GetWorkflowStages(workflowID uint) ([]model.WorkflowStage, error) {
+	var stages []model.WorkflowStage
+	err := db.DB.Where("workflow_id = ?", workflowID).Order("sequence ASC").Find(&stages).Error
+	return stages, err
+}
+
+// GetWorkflowWorkersByStage returns all workers for a given workflow stage.
+func GetWorkflowWorkersByStage(stageID uint) ([]model.WorkflowWorker, error) {
+	var workers []model.WorkflowWorker
+	err := db.DB.Where("stage_id = ?", stageID).Find(&workers).Error
+	return workers, err
+}

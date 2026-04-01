@@ -196,7 +196,7 @@ func SaveScript(userID uint, s *ChatSession, similarityScore, viralScore float64
 	filename := fmt.Sprintf("%d_%d.md", userID, time.Now().UnixMilli())
 	path := filepath.Join(dir, filename)
 
-	cleanDraft := stripQualityCheck(s.FinalDraft)
+	cleanDraft := StripQualityCheck(s.FinalDraft)
 
 	content := fmt.Sprintf("# 口播稿\n\n生成时间: %s\n来源: %s\n\n---\n\n%s",
 		time.Now().Format("2006-01-02 15:04:05"),
@@ -254,12 +254,48 @@ func extractTitle(text string) string {
 	return "口播稿 " + time.Now().Format("01-02 15:04")
 }
 
-// stripQualityCheck removes the ---QUALITY_CHECK_START--- ... ---QUALITY_CHECK_END--- block.
-func stripQualityCheck(text string) string {
+// StripQualityCheck removes the ---QUALITY_CHECK_START--- ... ---QUALITY_CHECK_END--- block.
+func StripQualityCheck(text string) string {
 	const startMark = "---QUALITY_CHECK_START---"
 	idx := strings.Index(text, startMark)
 	if idx < 0 {
 		return strings.TrimSpace(text)
 	}
 	return strings.TrimRight(text[:idx], "\n\r ")
+}
+
+// SaveScriptFromWorkflow saves a script produced by the workflow engine (no ChatSession dependency).
+func SaveScriptFromWorkflow(userID uint, sourceURL, draft string, similarityScore float64) (*model.Script, error) {
+	dir := config.C.StoragePath
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+	filename := fmt.Sprintf("%d_%d.md", userID, time.Now().UnixMilli())
+	path := filepath.Join(dir, filename)
+
+	cleanDraft := StripQualityCheck(draft)
+
+	content := fmt.Sprintf("# 口播稿\n\n生成时间: %s\n来源: %s\n\n---\n\n%s",
+		time.Now().Format("2006-01-02 15:04:05"),
+		sourceURL,
+		cleanDraft,
+	)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return nil, err
+	}
+
+	title := extractTitle(cleanDraft)
+
+	script := &model.Script{
+		UserID:          userID,
+		Title:           title,
+		SourceURL:       sourceURL,
+		ContentPath:     path,
+		SimilarityScore: similarityScore,
+	}
+	if err := repository.CreateScript(script); err != nil {
+		return nil, err
+	}
+
+	return script, nil
 }
