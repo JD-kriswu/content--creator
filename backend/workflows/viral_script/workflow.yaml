@@ -1,0 +1,49 @@
+type: viral_script
+display_name: 口播稿改写
+meta:
+  max_similarity: 30
+  word_count: "300-600"
+
+stages:
+  - id: research
+    display_name: 研究分析
+    type: parallel
+    workers:
+      - viral_decoder
+      - style_architect
+      - material_curator
+    synth_prompt: synth/research_synth.yaml
+
+  - id: create
+    display_name: 大纲创作
+    type: serial
+    workers:
+      - creative_agent
+
+  - id: optimize
+    display_name: 优化审查
+    type: serial
+    workers:
+      - optimization_agent
+
+  - id: confirm_outline
+    display_name: 确认大纲
+    type: human
+    prompt: "请确认大纲：1-确认开始撰写 2-调整大纲 3-更换素材 4-重新分析"
+    options:
+      - "确认，开始撰写"
+      - "调整大纲"
+      - "更换素材"
+      - "重新分析"
+
+  - id: write
+    display_name: 撰写终稿
+    type: serial
+    workers:
+      - draft_writer
+
+  - id: similarity
+    display_name: 相似度检测
+    type: serial
+    workers:
+      - similarity_checker

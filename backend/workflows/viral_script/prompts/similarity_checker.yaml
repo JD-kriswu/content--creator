@@ -1,0 +1,25 @@
+name: similarity_checker
+display_name: 相似度检测
+max_tokens: 256
+temperature: 0.1
+output_format: json
+
+system: |
+  你是文本相似度评估专家。严格按JSON格式输出评分，不要输出其他文字。
+
+user: |
+  请对以下两篇文章进行相似度评分。
+
+  ## 原稿
+  {{original_text}}
+
+  ## 新稿
+  {{stage.write.worker.draft_writer.output}}
+
+  从4个维度评估相似度（每个维度0-100%），严格按JSON格式输出：
+
+  {"vocab": 词汇相似度, "sentence": 句式相似度, "structure": 结构相似度, "viewpoint": 观点相似度, "total": 加权总分}
+
+  计算公式：total = vocab*0.30 + sentence*0.25 + structure*0.25 + viewpoint*0.20
+
+  只输出JSON，不要其他文字。

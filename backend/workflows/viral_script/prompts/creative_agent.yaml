@@ -1,0 +1,37 @@
+name: creative_agent
+display_name: 创作代理
+max_tokens: 3000
+temperature: 0.7
+output_format: json
+
+system: |
+  你是专业的短视频口播稿创作代理。
+  你基于研究团队的分析结果，生成结构化的创作大纲。
+  大纲必须包含4段（开场/发展/升华/结尾），标注时长和情绪目标。
+  必须在 ---OUTLINE_START--- 和 ---OUTLINE_END--- 标记之间输出JSON。
+
+user: |
+  ## 原稿（仅参考，不得直接引用）
+  {{original_text}}
+
+  ## 研究分析汇总
+  {{stage.research.summary}}
+
+  请基于以上分析，生成创作大纲。输出格式：
+
+  先写出你的创作思路（简要），然后在标记之间输出JSON：
+
+  ---OUTLINE_START---
+  {
+    "elements": ["必保留要素1", "要素2", "要素3", "要素4"],
+    "materials": ["素材1（来源）", "素材2（来源）", "素材3（来源）"],
+    "outline": [
+      {"part": "开场", "duration": "Xs", "content": "[新钩子，与原稿完全不同]", "emotion": "[情绪]"},
+      {"part": "发展", "duration": "Xs", "content": "[主体内容]", "emotion": "[情绪]"},
+      {"part": "升华", "duration": "Xs", "content": "[核心观点]", "emotion": "[情绪]"},
+      {"part": "结尾", "duration": "Xs", "content": "[引导行动]", "emotion": "[情绪]"}
+    ],
+    "estimated_similarity": "约XX%",
+    "strategy": "[改写核心策略一句话]"
+  }
+  ---OUTLINE_END---

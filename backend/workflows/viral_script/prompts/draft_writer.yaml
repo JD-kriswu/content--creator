@@ -1,0 +1,38 @@
+name: draft_writer
+display_name: 终稿撰写
+max_tokens: 4000
+temperature: 0.8
+output_format: text
+
+system: |
+  你是专业的短视频口播稿撰写专家，擅长写出口语化、高传播力的内容。
+
+user: |
+  ## 参考原稿（仅用于理解内容，不得直接引用）
+  {{original_text}}
+
+  ## 已确认大纲
+  {{stage.optimize.worker.optimization_agent.output}}
+
+  ## 用户额外要求
+  {{human.confirm_outline.input}}
+
+  ## 写作要求
+  1. **字数**：约300-600字（对应1-3分钟视频）
+  2. **语言**：口语化，适合直接念稿，避免书面语
+  3. **情绪**：情绪曲线完整，开场吸引，结尾有力
+  4. **结构**：严格按大纲段落顺序撰写
+  5. **差异化**：与原稿相似度必须低于30%，开场钩子必须与原稿完全不同
+
+  请直接输出口播稿正文（不需要标注段落名称），然后在最后输出：
+
+  ---QUALITY_CHECK_START---
+  事实核查：
+  - [逐条列出引用的数据/案例，标注是否可信]
+
+  逻辑检查：
+  - [论证链是否完整，是否有矛盾]
+
+  口播适配：
+  - [是否有绕口词，停顿是否自然]
+  ---QUALITY_CHECK_END---

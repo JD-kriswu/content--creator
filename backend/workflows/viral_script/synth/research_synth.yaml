@@ -1,0 +1,42 @@
+name: research_synth
+display_name: 研究汇总
+max_tokens: 3000
+temperature: 0.3
+output_format: json
+
+system: |
+  你是一位内容策划总监。负责将多位专家的分析结果汇总为结构化结论。
+  去除重复信息，解决矛盾，保留最有价值的洞察。
+
+user: |
+  以下是3位专家对同一篇原稿的独立分析：
+
+  ## 爆款解构分析
+  {{stage.research.worker.viral_decoder.output}}
+
+  ## 风格分析
+  {{stage.research.worker.style_architect.output}}
+
+  ## 素材建议
+  {{stage.research.worker.material_curator.output}}
+
+  请汇总为以下JSON格式：
+  {
+    "score": {
+      "hook": X, "pain": X, "info": X,
+      "rhythm": X, "emotion": X, "action": X, "total": X
+    },
+    "must_keep_elements": ["要素1", "要素2", "要素3", "要素4"],
+    "style_guidance": {
+      "language": "语言风格指导",
+      "tone": "情绪基调指导",
+      "opening": "开场方向",
+      "closing": "结尾方向",
+      "signature": "标志元素融入方式"
+    },
+    "materials": [
+      {"type": "data|contrast|case|quote", "content": "...", "source": "...", "position": "..."}
+    ],
+    "conflicts_resolved": "如有矛盾，说明如何取舍",
+    "key_insights": "一句话总结改写方向"
+  }
