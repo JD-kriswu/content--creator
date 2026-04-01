@@ -1,3 +1,7 @@
+// DEPRECATED: Prompts have been migrated to YAML files in backend/workflows/.
+// This file is kept for reference only. The active prompts are in:
+//   workflows/viral_script/prompts/*.yaml
+//   workflows/viral_script/synth/*.yaml
 package service
 
 import "fmt"
