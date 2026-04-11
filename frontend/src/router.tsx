@@ -7,6 +7,9 @@ import { Auth } from './pages/Auth'
 import { Dashboard } from './pages/Dashboard'
 import { Result } from './pages/Result'
 import { History } from './pages/History'
+import { StyleInit } from './pages/StyleInit'
+import { PromptEditor } from './pages/PromptEditor'
+import { FeishuBind } from './pages/FeishuBind'
 
 function ProtectedRoute() {
   const { token } = useAuth()
@@ -25,8 +28,11 @@ export const router = createBrowserRouter(
           Component: ProtectedRoute,
           children: [
             { path: 'dashboard', Component: Dashboard },
+            { path: 'style-init', Component: StyleInit },
             { path: 'result/:id', Component: Result },
             { path: 'history', Component: History },
+            { path: 'prompts', Component: PromptEditor },
+            { path: 'feishu', Component: FeishuBind },
           ],
         },
       ],
