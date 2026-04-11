@@ -10,5 +10,12 @@
   "llm_base_url": "https://api.anthropic.com",
   "storage_type": "local",
   "storage_path": "data/scripts",
-  "base_path": ""
+  "base_path": "",
+  "web_search_provider": "",
+  "web_search_api_key": "",
+  "feishu_enabled": false,
+  "feishu_manifest_path": "feishu_manifest.yaml",
+  "feishu_ws_reconnect_max": 3,
+  "feishu_ws_heartbeat_sec": 30,
+  "feishu_card_throttle_ms": 200
 }
