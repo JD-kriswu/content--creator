@@ -1,16 +1,43 @@
 import { useState, useEffect } from 'react'
 import { FeishuQRCode } from '../components/FeishuQRCode'
-import { getFeishuBots, unbindFeishuBot, type FeishuBot } from '../api/feishu'
+import { getFeishuBots, unbindFeishuBot, getBindQRCode, getBindStatus, type FeishuBot } from '../api/feishu'
 
 export function FeishuBind() {
   const [bots, setBots] = useState<FeishuBot[]>([])
-  const [status] = useState<'waiting' | 'success' | 'error'>('waiting')
-  const [qrUrl] = useState('')
+  const [qrUrl, setQrUrl] = useState('')
+  const [bindToken, setBindToken] = useState('')
+  const [bindStatus, setBindStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadBots()
   }, [])
+
+  // Poll status when bindToken is set and status is waiting
+  useEffect(() => {
+    if (!bindToken || bindStatus !== 'waiting') return
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await getBindStatus(bindToken)
+        if (status.status === 'success') {
+          setBindStatus('success')
+          clearInterval(pollInterval)
+          loadBots()
+        } else if (status.status === 'error') {
+          setBindStatus('error')
+          clearInterval(pollInterval)
+        }
+        // pending: continue polling
+      } catch {
+        // token expired or error
+        setBindStatus('error')
+        clearInterval(pollInterval)
+      }
+    }, 2000)
+
+    return () => clearInterval(pollInterval)
+  }, [bindToken, bindStatus])
 
   const loadBots = async () => {
     try {
@@ -22,6 +49,23 @@ export function FeishuBind() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleStartBind = async () => {
+    try {
+      const data = await getBindQRCode()
+      setQrUrl(data.qrcode_url)
+      setBindToken(data.bind_token)
+      setBindStatus('waiting')
+    } catch {
+      setBindStatus('error')
+    }
+  }
+
+  const handleReset = () => {
+    setQrUrl('')
+    setBindToken('')
+    setBindStatus('idle')
   }
 
   const handleUnbind = async (botId: number) => {
@@ -67,17 +111,43 @@ export function FeishuBind() {
 
       {/* 扫码绑定 */}
       <div className="text-center">
-        <p className="mb-4">扫码创建飞书机器人，可在飞书中使用口播稿创作服务</p>
-        {/* 注意：实际的扫码流程需要通过飞书开放平台的 App Manifest 导入 API 生成二维码 URL。
-            当前版本先显示提示信息，后续根据飞书官方文档实现完整的扫码创建流程。 */}
-        {qrUrl ? (
-          <FeishuQRCode qrUrl={qrUrl} status={status} onRefresh={loadBots} />
-        ) : (
-          <div className="w-64 h-64 mx-auto border rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
-            <p className="text-gray-500 text-center p-4">
-              飞书扫码绑定功能需要配置飞书开放平台应用。<br/>
-              请联系管理员获取绑定链接。
-            </p>
+        {bindStatus === 'idle' && (
+          <>
+            <p className="mb-4">扫码创建飞书机器人，可在飞书中使用口播稿创作服务</p>
+            <button
+              onClick={handleStartBind}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              创建新机器人
+            </button>
+          </>
+        )}
+
+        {bindStatus === 'waiting' && qrUrl && (
+          <FeishuQRCode qrUrl={qrUrl} status="waiting" onRefresh={handleReset} />
+        )}
+
+        {bindStatus === 'success' && (
+          <div className="py-8">
+            <p className="text-green-600 text-lg mb-4">绑定成功！</p>
+            <button
+              onClick={handleReset}
+              className="px-6 py-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              继续绑定其他机器人
+            </button>
+          </div>
+        )}
+
+        {bindStatus === 'error' && (
+          <div className="py-8">
+            <p className="text-red-600 text-lg mb-4">绑定失败，请重试</p>
+            <button
+              onClick={handleReset}
+              className="px-6 py-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              重试
+            </button>
           </div>
         )}
       </div>
