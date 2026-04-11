@@ -34,6 +34,9 @@ func main() {
 		feishuRouter := feishu.NewRouter(wfLoader)
 		feishuPool := feishu.GetWSPool(config.C.FeishuWSReconnectMax, config.C.FeishuWSHeartbeatSec)
 
+		// Connect bind callback handler for app_manifest.created events
+		feishu.SetBindCallbackHandler(handler.HandleBindCallback)
+
 		// Connect all existing bots
 		bots, _ := repository.GetConnectedFeishuBots()
 		for _, bot := range bots {
@@ -114,6 +117,8 @@ func main() {
 		{
 			feishuAPI.GET("/bots", handler.GetFeishuBots)
 			feishuAPI.DELETE("/bots/:id", handler.UnbindFeishuBot)
+			feishuAPI.GET("/bind-qrcode", handler.GetBindQRCode)
+			feishuAPI.GET("/bind-status/:token", handler.GetBindStatus)
 		}
 	}
 

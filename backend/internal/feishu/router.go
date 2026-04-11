@@ -25,6 +25,12 @@ func NewRouter(loader *workflow.Loader) *Router {
 // HandleEvent processes incoming WebSocket events.
 // It routes events based on type: im.message.receive_v1 or card.action.trigger.
 func (r *Router) HandleEvent(event WSEvent) {
+	// app_manifest.created events don't have bot info in DB yet
+	if event.Type == "app_manifest.created" {
+		r.handleManifestCreated(event)
+		return
+	}
+
 	// Get bot info from repository
 	bot, err := repository.GetFeishuBotByAppID(event.AppID)
 	if err != nil {
@@ -314,4 +320,40 @@ func (r *Router) sendBusyMessage(chatID string, bot *model.FeishuBot) {
 	if err != nil {
 		log.Printf("[FeishuRouter] failed to send busy message: %v", err)
 	}
+}
+
+// handleManifestCreated processes app_manifest.created events (scan-to-create flow).
+func (r *Router) handleManifestCreated(event WSEvent) {
+	var manifestEvent ManifestCreatedEvent
+	if err := json.Unmarshal(event.Event, &manifestEvent); err != nil {
+		log.Printf("[FeishuRouter] failed to parse manifest event: %v", err)
+		return
+	}
+
+	bindToken := manifestEvent.BindToken
+	if bindToken == "" {
+		log.Printf("[FeishuRouter] manifest event missing bind_token")
+		return
+	}
+
+	// Import handler package for HandleBindCallback - use package-level function
+	if err := handleBindCallback(bindToken, manifestEvent.AppID, manifestEvent.AppSecret, manifestEvent.TenantKey); err != nil {
+		log.Printf("[FeishuRouter] bind callback failed: %v", err)
+		return
+	}
+
+	log.Printf("[FeishuRouter] bot created successfully: app_id=%s", manifestEvent.AppID)
+
+	// Establish WebSocket connection for new bot
+	pool := GetWSPool(3, 30)
+	pool.Connect(manifestEvent.AppID, manifestEvent.AppSecret, r.HandleEvent)
+}
+
+// handleBindCallback is a package-level function that calls the handler's HandleBindCallback.
+// This is needed to avoid circular import between handler and feishu packages.
+var handleBindCallback func(bindToken, appID, appSecret, tenantKey string) error
+
+// SetBindCallbackHandler sets the callback handler for manifest creation events.
+func SetBindCallbackHandler(fn func(bindToken, appID, appSecret, tenantKey string) error) {
+	handleBindCallback = fn
 }
