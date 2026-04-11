@@ -1,0 +1,19 @@
+app:
+  name: "口播稿助手"
+  description: "AI驱动的爆款口播稿改写工具"
+
+permissions:
+  - im:message:receive_as_bot
+  - im:message:send_as_bot
+  - im:card
+  - contact:user.base:readonly
+
+events:
+  - im.message.receive_v1
+  - card.action.trigger
+
+event_subscription:
+  type: websocket
+
+config:
+  locale: zh_CN
