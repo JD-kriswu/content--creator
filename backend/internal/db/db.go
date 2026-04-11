@@ -56,5 +56,8 @@ func Init() error {
 		&model.Workflow{},
 		&model.WorkflowStage{},
 		&model.WorkflowWorker{},
+		&model.FeishuBot{},
+		&model.FeishuUser{},
+		&model.FeishuConversation{},
 	)
 }
