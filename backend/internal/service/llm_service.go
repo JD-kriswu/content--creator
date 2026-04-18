@@ -124,7 +124,7 @@ func StreamClaude(system, userPrompt string, cb StreamCallback) (string, error) 
 
 	var sb strings.Builder
 	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 64*1024), 64*1024)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024) // Increased buffer for large responses
 	for scanner.Scan() {
 		line := scanner.Text()
 		var payload string
@@ -142,20 +142,37 @@ func StreamClaude(system, userPrompt string, cb StreamCallback) (string, error) 
 		var event struct {
 			Type  string `json:"type"`
 			Delta struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
+				Type     string `json:"type"`
+				Text     string `json:"text"`
+				Thinking string `json:"thinking"` // 百炼 API thinking_delta 格式
 			} `json:"delta"`
 		}
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			continue
 		}
-		if event.Type == "content_block_delta" && event.Delta.Type == "text_delta" {
-			sb.WriteString(event.Delta.Text)
-			if cb != nil && !cb(event.Delta.Text) {
-				break
+		// 支持 Anthropic 标准 text_delta 和百炼 thinking_delta 两种格式
+		if event.Type == "content_block_delta" {
+			var token string
+			if event.Delta.Type == "text_delta" {
+				token = event.Delta.Text
+			} else if event.Delta.Type == "thinking_delta" {
+				token = event.Delta.Thinking
+			}
+			if token != "" {
+				sb.WriteString(token)
+				if cb != nil && !cb(token) {
+					break
+				}
 			}
 		}
 	}
-	return sb.String(), scanner.Err()
+	if err := scanner.Err(); err != nil {
+		// Return partial content even on error, but report the error
+		if sb.Len() > 0 {
+			return sb.String(), nil // Return what we got
+		}
+		return "", fmt.Errorf("stream read error: %w", err)
+	}
+	return sb.String(), nil
 }
 

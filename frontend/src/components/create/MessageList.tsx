@@ -1,16 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { Bot } from 'lucide-react'
-import { ParallelStageView, type WorkerStream } from './ParallelStageView'
 
 export interface ChatMsg {
   id: string
-  type: 'user' | 'ai' | 'step' | 'info' | 'action' | 'similarity' | 'error' | 'outline' | 'parallel_stage'
+  type: 'user' | 'ai' | 'step' | 'info' | 'action' | 'similarity' | 'error' | 'outline'
   content?: string
   options?: string[]        // for action type
   data?: unknown            // for outline/similarity
   streaming?: boolean
-  workers?: WorkerStream[]  // for parallel_stage type
-  synthContent?: string     // for parallel_stage type
 }
 
 interface OutlineData {
@@ -92,7 +89,7 @@ export function MessageList({ messages, onAction, disabled }: MessageListProps) 
   }, [messages])
 
   return (
-    <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+    <div ref={listRef} data-testid="message-list" className="flex-1 overflow-y-auto p-4 space-y-3">
       {messages.map((msg) => (
         <div
           key={msg.id}
@@ -135,7 +132,7 @@ export function MessageList({ messages, onAction, disabled }: MessageListProps) 
 
             {msg.type === 'error' && (
               <div className="rounded-xl px-3 py-2 bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-sm">
-                ❌ {msg.content}
+                {msg.content}
               </div>
             )}
 
@@ -160,17 +157,8 @@ export function MessageList({ messages, onAction, disabled }: MessageListProps) 
 
             {msg.type === 'similarity' && !!msg.data && (
               <div className="rounded-xl px-3 py-2 bg-green-50 dark:bg-green-950/50 text-green-700 dark:text-green-400 text-sm">
-                相似度检测完成 ✅
+                相似度检测完成
               </div>
-            )}
-
-            {msg.type === 'parallel_stage' && msg.workers && (
-              <ParallelStageView
-                stageName={msg.content ?? ''}
-                workers={msg.workers}
-                synthContent={msg.synthContent}
-                synthStatus="done"
-              />
             )}
           </div>
         </div>

@@ -9,11 +9,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type CharterDef struct {
+	Name        string `yaml:"name"`
+	DisplayName string `yaml:"display_name"`
+	Content     string `yaml:"content"`
+}
+
 type Loader struct {
 	basePath string
 	devMode  bool
 	mu       sync.RWMutex
 	cache    map[string]*WorkflowDef
+	charter  *CharterDef
 }
 
 func NewLoader(basePath string, devMode bool) *Loader {
@@ -43,6 +50,9 @@ func (l *Loader) Reload(workflowType string) (*WorkflowDef, error) {
 func (l *Loader) loadFromDisk(workflowType string) (*WorkflowDef, error) {
 	dir := filepath.Join(l.basePath, workflowType)
 
+	// Load charter first (if exists)
+	l.loadCharter(dir)
+
 	wfPath := filepath.Join(dir, "workflow.yaml")
 	data, err := os.ReadFile(wfPath)
 	if err != nil {
@@ -62,6 +72,10 @@ func (l *Loader) loadFromDisk(workflowType string) (*WorkflowDef, error) {
 			if err != nil {
 				return nil, fmt.Errorf("stage %s worker %s: %w", stage.ID, name, err)
 			}
+			// Inject charter into worker's system prompt
+			if l.charter != nil && l.charter.Content != "" {
+				wd.SystemPrompt = l.charter.Content + "\n\n" + wd.SystemPrompt
+			}
 			stage.Workers = append(stage.Workers, *wd)
 		}
 
@@ -69,6 +83,10 @@ func (l *Loader) loadFromDisk(workflowType string) (*WorkflowDef, error) {
 			sd, err := l.loadSynthDef(dir, stage.SynthPath)
 			if err != nil {
 				return nil, fmt.Errorf("stage %s synth: %w", stage.ID, err)
+			}
+			// Inject charter into synth's system prompt
+			if l.charter != nil && l.charter.Content != "" {
+				sd.SystemPrompt = l.charter.Content + "\n\n" + sd.SystemPrompt
 			}
 			stage.SynthDef = sd
 		}
@@ -79,6 +97,23 @@ func (l *Loader) loadFromDisk(workflowType string) (*WorkflowDef, error) {
 	l.mu.Unlock()
 
 	return &def, nil
+}
+
+func (l *Loader) loadCharter(dir string) {
+	charterPath := filepath.Join(dir, "_charter.yaml")
+	data, err := os.ReadFile(charterPath)
+	if err != nil {
+		// Charter is optional
+		l.charter = nil
+		return
+	}
+	var charter CharterDef
+	if err := yaml.Unmarshal(data, &charter); err != nil {
+		// Invalid charter, skip
+		l.charter = nil
+		return
+	}
+	l.charter = &charter
 }
 
 func (l *Loader) loadWorkerDef(dir, name string) (*WorkerDef, error) {
@@ -105,4 +140,9 @@ func (l *Loader) loadSynthDef(dir, relPath string) (*SynthDef, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return &sd, nil
+}
+
+// GetCharter returns the loaded charter (for debugging/preview)
+func (l *Loader) GetCharter() *CharterDef {
+	return l.charter
 }

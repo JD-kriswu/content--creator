@@ -105,14 +105,17 @@ func ExecuteSerialStage(ctx *WorkflowContext, stage StageDef, sse SSEWriter) (*S
 func ExecuteHumanStage(ctx *WorkflowContext, stage StageDef, sse SSEWriter) error {
 	sse.SendStageStart(stage.ID, stage.DisplayName, stage.Type)
 
-	// Find the last stage output's Summary and parse outline from it
-	var lastSummary string
-	for _, so := range ctx.StageOutputs {
-		lastSummary = so.Summary
+	// Find the outline from the "create" stage output (creative_agent generates the outline)
+	var outlineSource string
+	if createOut, ok := ctx.StageOutputs["create"]; ok && createOut.Summary != "" {
+		outlineSource = createOut.Summary
+	} else if optimizeOut, ok := ctx.StageOutputs["optimize"]; ok && optimizeOut.Summary != "" {
+		// Fallback: try optimize stage
+		outlineSource = optimizeOut.Summary
 	}
 
-	if lastSummary != "" {
-		outlineData, _ := service.ParseOutlineFromAnalysis(lastSummary)
+	if outlineSource != "" {
+		outlineData, _ := service.ParseOutlineFromAnalysis(outlineSource)
 		if outlineData != nil {
 			sse.SendOutline(outlineData)
 		}

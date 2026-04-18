@@ -3,6 +3,8 @@ package feishu
 import (
 	"log"
 	"sync"
+
+	"content-creator-imm/internal/repository"
 )
 
 type WSConnectionPool struct {
@@ -43,6 +45,13 @@ func (p *WSConnectionPool) Connect(appID, appSecret string, handler func(WSEvent
 
 	p.connections[appID] = conn
 	log.Printf("[FeishuPool] added: %s", appID)
+
+	// Update ws_connected status in database
+	bot, err := repository.GetFeishuBotByAppID(appID)
+	if err == nil {
+		repository.UpdateFeishuBotWSStatus(bot.ID, true)
+	}
+
 	return nil
 }
 
@@ -53,6 +62,12 @@ func (p *WSConnectionPool) Disconnect(appID string) {
 	if conn, ok := p.connections[appID]; ok {
 		conn.Disconnect()
 		delete(p.connections, appID)
+
+		// Update ws_connected status in database
+		bot, err := repository.GetFeishuBotByAppID(appID)
+		if err == nil {
+			repository.UpdateFeishuBotWSStatus(bot.ID, false)
+		}
 	}
 }
 

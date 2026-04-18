@@ -12,7 +12,10 @@ func RunWorker(wd WorkerDef, input WorkerInput, stageID string, sse SSEWriter) (
 	start := time.Now()
 
 	content, err := service.StreamClaude(input.SystemPrompt, input.UserPrompt, func(token string) bool {
-		sse.SendWorkerToken(wd.Name, token)
+		// 默认流式输出，只有 silent_output: true 时才跳过 worker_token
+		if !wd.SilentOutput {
+			sse.SendWorkerToken(wd.Name, token)
+		}
 		return true
 	})
 	duration := time.Since(start)

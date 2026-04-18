@@ -5,7 +5,7 @@ interface OutlineEditorProps {
 
 export function OutlineEditor({ content, onChange }: OutlineEditorProps) {
   return (
-    <div className="h-full w-full flex flex-col bg-white dark:bg-gray-900">
+    <div data-testid="outline-editor" className="h-full w-full flex flex-col bg-white dark:bg-gray-900">
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-800">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">大纲</h3>
       </div>

@@ -1,43 +1,17 @@
-import { useState, useEffect } from 'react'
-import { FeishuQRCode } from '../components/FeishuQRCode'
-import { getFeishuBots, unbindFeishuBot, getBindQRCode, getBindStatus, type FeishuBot } from '../api/feishu'
+import { useState, useEffect, useCallback } from 'react'
+import { getFeishuBots, unbindFeishuBot, startBindFlow, cancelBind, type FeishuBot, type BindSSEEvent } from '../api/feishu'
 
 export function FeishuBind() {
   const [bots, setBots] = useState<FeishuBot[]>([])
-  const [qrUrl, setQrUrl] = useState('')
   const [bindToken, setBindToken] = useState('')
-  const [bindStatus, setBindStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle')
+  const [bindStatus, setBindStatus] = useState<'idle' | 'scanning' | 'creating' | 'success' | 'error'>('idle')
+  const [qrCodeLines, setQrCodeLines] = useState<string[]>([])
+  const [infoMessage, setInfoMessage] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadBots()
   }, [])
-
-  // Poll status when bindToken is set and status is waiting
-  useEffect(() => {
-    if (!bindToken || bindStatus !== 'waiting') return
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const status = await getBindStatus(bindToken)
-        if (status.status === 'success') {
-          setBindStatus('success')
-          clearInterval(pollInterval)
-          loadBots()
-        } else if (status.status === 'error') {
-          setBindStatus('error')
-          clearInterval(pollInterval)
-        }
-        // pending: continue polling
-      } catch {
-        // token expired or error
-        setBindStatus('error')
-        clearInterval(pollInterval)
-      }
-    }, 2000)
-
-    return () => clearInterval(pollInterval)
-  }, [bindToken, bindStatus])
 
   const loadBots = async () => {
     try {
@@ -51,21 +25,134 @@ export function FeishuBind() {
     }
   }
 
-  const handleStartBind = async () => {
-    try {
-      const data = await getBindQRCode()
-      setQrUrl(data.qrcode_url)
-      setBindToken(data.bind_token)
-      setBindStatus('waiting')
-    } catch {
-      setBindStatus('error')
-    }
-  }
+  const handleStartBind = useCallback(() => {
+    setBindStatus('scanning')
+    setQrCodeLines([])
+    setInfoMessage('正在启动绑定流程...')
+    setBindToken('') // Will be set when init event arrives
 
-  const handleReset = () => {
-    setQrUrl('')
+    // Start SSE connection
+    startBindFlow().then(response => {
+      if (!response.ok) {
+        setBindStatus('error')
+        setInfoMessage('启动绑定流程失败')
+        return
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        setBindStatus('error')
+        setInfoMessage('无法读取响应流')
+        return
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      const processLine = (line: string) => {
+        if (!line.startsWith('data: ')) return
+
+        const jsonStr = line.slice(6).trim()
+        if (!jsonStr) return
+
+        try {
+          const event: BindSSEEvent = JSON.parse(jsonStr)
+
+          switch (event.type) {
+            case 'init':
+              if (event.data.bind_token) {
+                setBindToken(event.data.bind_token)
+              }
+              break
+
+            case 'qrcode':
+              if (event.data.line) {
+                // Convert ANSI codes to visible characters
+                const cleanLine = cleanANSI(event.data.line)
+                setQrCodeLines(prev => [...prev, cleanLine])
+              }
+              break
+
+            case 'status':
+              if (event.data.status === 'scanning') {
+                setBindStatus('scanning')
+                setInfoMessage('请使用飞书 APP 扫描二维码')
+              } else if (event.data.status === 'creating') {
+                setBindStatus('creating')
+                setInfoMessage('正在创建机器人...')
+              }
+              break
+
+            case 'info':
+              if (event.data.message) {
+                setInfoMessage(event.data.message)
+              }
+              break
+
+            case 'success':
+              setBindStatus('success')
+              setInfoMessage(`绑定成功！机器人: ${event.data.bot_name || '口播稿助手'}`)
+              loadBots()
+              // Stop reading
+              reader.cancel()
+              break
+
+            case 'error':
+              setBindStatus('error')
+              setInfoMessage(event.data.message || '绑定失败')
+              // Stop reading
+              reader.cancel()
+              break
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE event:', jsonStr, e)
+        }
+      }
+
+      const readLoop = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+
+            // Process complete lines
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              processLine(line)
+            }
+          }
+        } catch (e) {
+          if (bindStatus !== 'success' && bindStatus !== 'error') {
+            setBindStatus('error')
+            setInfoMessage('连接中断')
+          }
+        }
+      }
+
+      readLoop()
+    }).catch(err => {
+      setBindStatus('error')
+      setInfoMessage(`启动绑定流程失败: ${err.message}`)
+    })
+  }, [bindStatus])
+
+  const handleReset = async () => {
+    // Cancel ongoing bind if there's a token
+    if (bindToken) {
+      try {
+        await cancelBind(bindToken)
+      } catch {
+        // ignore
+      }
+    }
     setBindToken('')
     setBindStatus('idle')
+    setQrCodeLines([])
+    setInfoMessage('')
   }
 
   const handleUnbind = async (botId: number) => {
@@ -123,13 +210,35 @@ export function FeishuBind() {
           </>
         )}
 
-        {bindStatus === 'waiting' && qrUrl && (
-          <FeishuQRCode qrUrl={qrUrl} status="waiting" onRefresh={handleReset} />
+        {(bindStatus === 'scanning' || bindStatus === 'creating') && (
+          <div className="py-4">
+            {/* ASCII QR Code display */}
+            {qrCodeLines.length > 0 && (
+              <div className="mb-4 p-4 bg-gray-900 rounded-lg inline-block">
+                <pre className="text-white font-mono text-xs leading-none whitespace-pre overflow-hidden">
+                  {qrCodeLines.join('\n')}
+                </pre>
+              </div>
+            )}
+            <p className="text-gray-600 mb-2">{infoMessage}</p>
+            {bindStatus === 'scanning' && qrCodeLines.length === 0 && (
+              <p className="text-gray-500">正在生成二维码...</p>
+            )}
+            {bindStatus === 'creating' && (
+              <p className="text-blue-500 animate-pulse">正在创建机器人应用...</p>
+            )}
+            <button
+              onClick={handleReset}
+              className="mt-4 px-4 py-2 text-sm border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              取消
+            </button>
+          </div>
         )}
 
         {bindStatus === 'success' && (
           <div className="py-8">
-            <p className="text-green-600 text-lg mb-4">绑定成功！</p>
+            <p className="text-green-600 text-lg mb-4">{infoMessage}</p>
             <button
               onClick={handleReset}
               className="px-6 py-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -141,7 +250,7 @@ export function FeishuBind() {
 
         {bindStatus === 'error' && (
           <div className="py-8">
-            <p className="text-red-600 text-lg mb-4">绑定失败，请重试</p>
+            <p className="text-red-600 text-lg mb-4">{infoMessage}</p>
             <button
               onClick={handleReset}
               className="px-6 py-2 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -153,4 +262,26 @@ export function FeishuBind() {
       </div>
     </div>
   )
+}
+
+// Clean ANSI color codes and convert to visible characters
+function cleanANSI(line: string): string {
+  // Remove ANSI color codes like [47m[30m and [0m
+  // But keep the visual characters (▄, █, ▀)
+  let cleaned = line
+
+  // Remove ANSI escape sequences
+  cleaned = cleaned.replace(/\x1b\[[0-9;]*m/g, '')
+
+  // Handle the special pattern [47m[30m text [0m
+  cleaned = cleaned.replace(/\[47m\[30m/g, '')
+  cleaned = cleaned.replace(/\[0m/g, '')
+
+  // The QR code uses inverse video (white background, black text)
+  // In terminal: [47m (white bg) + [30m (black fg) = white block with black border
+  // The ▄ character represents half-block (top half filled)
+  // The █ character represents full block
+  // We display them as-is in white text on dark background
+
+  return cleaned
 }

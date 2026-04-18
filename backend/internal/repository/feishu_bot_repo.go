@@ -27,7 +27,8 @@ func GetFeishuBotsByUserID(userID uint) ([]model.FeishuBot, error) {
 
 func GetConnectedFeishuBots() ([]model.FeishuBot, error) {
 	var bots []model.FeishuBot
-	err := db.DB.Where("ws_connected = ?", true).Find(&bots).Error
+	// Get all bots that have app_id and app_secret (can be connected)
+	err := db.DB.Where("app_id != '' AND app_secret != ''").Find(&bots).Error
 	return bots, err
 }
 

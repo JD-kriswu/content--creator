@@ -9,14 +9,18 @@ export function resetSession() {
 }
 
 // Returns raw Response — caller handles ReadableStream
-export async function sendMessage(message: string): Promise<Response> {
+export async function sendMessage(message: string, convId?: number): Promise<Response> {
   const token = localStorage.getItem('token') ?? ''
+  const body: { message: string; conv_id?: number } = { message }
+  if (convId !== undefined) {
+    body.conv_id = convId
+  }
   return fetch('/creator/api/chat/message', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(body),
   })
 }

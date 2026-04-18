@@ -26,3 +26,7 @@ export function listConversations() {
 export function getConversation(id: number) {
   return api.get<{ conversation: Conversation; messages: string }>(`/conversations/${id}`)
 }
+
+export function deleteConversation(id: number) {
+  return api.delete<{ message: string }>(`/conversations/${id}`)
+}

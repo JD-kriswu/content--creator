@@ -32,17 +32,20 @@ func main() {
 	// Initialize Feishu WebSocket if enabled
 	if config.C.FeishuEnabled {
 		feishuRouter := feishu.NewRouter(wfLoader)
+		handler.SetFeishuRouter(feishuRouter)
 		feishuPool := feishu.GetWSPool(config.C.FeishuWSReconnectMax, config.C.FeishuWSHeartbeatSec)
-
-		// Connect bind callback handler for app_manifest.created events
-		feishu.SetBindCallbackHandler(handler.HandleBindCallback)
 
 		// Connect all existing bots
 		bots, _ := repository.GetConnectedFeishuBots()
+		connectedCount := 0
 		for _, bot := range bots {
-			feishuPool.Connect(bot.AppID, bot.AppSecret, feishuRouter.HandleEvent)
+			if err := feishuPool.Connect(bot.AppID, bot.AppSecret, feishuRouter.HandleEvent); err != nil {
+				log.Printf("[Feishu] failed to connect bot %s: %v", bot.AppID, err)
+			} else {
+				connectedCount++
+			}
 		}
-		log.Printf("[Feishu] initialized %d WS connections", len(bots))
+		log.Printf("[Feishu] initialized %d/%d WS connections", connectedCount, len(bots))
 	}
 
 	// Initialize web search service (optional)
@@ -117,8 +120,9 @@ func main() {
 		{
 			feishuAPI.GET("/bots", handler.GetFeishuBots)
 			feishuAPI.DELETE("/bots/:id", handler.UnbindFeishuBot)
-			feishuAPI.GET("/bind-qrcode", handler.GetBindQRCode)
-			feishuAPI.GET("/bind-status/:token", handler.GetBindStatus)
+			feishuAPI.GET("/bind-stream", handler.StartBindFlow)        // SSE stream for bind flow
+			feishuAPI.GET("/bind-status/:token", handler.GetBindStatus) // Polling fallback
+			feishuAPI.DELETE("/bind/:token", handler.CancelBind)        // Cancel bind
 		}
 	}
 

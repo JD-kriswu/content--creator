@@ -17,8 +17,15 @@ type MessageEvent struct {
 }
 
 type Sender struct {
+	SenderID   SenderID `json:"sender_id"`
+	SenderType string   `json:"sender_type"`
+	TenantKey  string   `json:"tenant_key"`
+}
+
+type SenderID struct {
 	OpenID  string `json:"open_id"`
 	UnionID string `json:"union_id"`
+	UserID  string `json:"user_id"`
 }
 
 type Message struct {
@@ -26,7 +33,7 @@ type Message struct {
 	ChatID     string `json:"chat_id"`
 	ChatType   string `json:"chat_type"`
 	Content    string `json:"content"`
-	CreateTime int64  `json:"create_time"`
+	CreateTime string `json:"create_time"` // Feishu uses string timestamp
 }
 
 // Card 按钮点击事件

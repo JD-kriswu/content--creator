@@ -39,3 +39,10 @@ func GetConversation(id, userID uint) (*model.Conversation, error) {
 	}
 	return &c, nil
 }
+
+func DeleteConversation(id, userID uint) error {
+	// First delete all messages in the conversation
+	db.DB.Where("conversation_id = ?", id).Delete(&model.Message{})
+	// Then delete the conversation
+	return db.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Conversation{}).Error
+}

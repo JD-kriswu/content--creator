@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"content-creator-imm/internal/model"
+	"content-creator-imm/internal/repository"
 )
 
 type SSEWriter interface {
@@ -21,6 +24,7 @@ type SSEWriter interface {
 	SendOutline(data any)
 	SendAction(prompt string, options []string)
 	SendSimilarity(data any)
+	SendFinalDraft(content string)
 	SendComplete(scriptID uint)
 	SendError(message string)
 }
@@ -95,10 +99,124 @@ func (g *GinSSEWriter) SendSimilarity(data any) {
 	g.send(map[string]any{"type": "similarity", "data": data})
 }
 
+func (g *GinSSEWriter) SendFinalDraft(content string) {
+	g.send(map[string]any{"type": "final_draft", "content": content})
+}
+
 func (g *GinSSEWriter) SendComplete(scriptID uint) {
 	g.send(map[string]any{"type": "complete", "scriptId": scriptID})
 }
 
 func (g *GinSSEWriter) SendError(message string) {
 	g.send(map[string]any{"type": "error", "message": message})
+}
+
+// MessageSavingSSEWriter wraps SSEWriter and saves messages to database
+type MessageSavingSSEWriter struct {
+	inner    SSEWriter
+	convID   uint
+	mu       sync.Mutex
+	messages []model.Message
+}
+
+func NewMessageSavingSSEWriter(inner SSEWriter, convID uint) *MessageSavingSSEWriter {
+	return &MessageSavingSSEWriter{inner: inner, convID: convID}
+}
+
+func (m *MessageSavingSSEWriter) saveMsg(msgType, content string, dataJSON, optionsJSON string, step int, name string) {
+	if m.convID == 0 {
+		return
+	}
+	msg := model.Message{
+		ConversationID: m.convID,
+		Role:           "assistant",
+		Type:           msgType,
+		Content:        content,
+		DataJSON:       dataJSON,
+		OptionsJSON:    optionsJSON,
+		Step:           step,
+		Name:           name,
+	}
+	m.mu.Lock()
+	m.messages = append(m.messages, msg)
+	m.mu.Unlock()
+	repository.CreateMessage(&msg)
+}
+
+func (m *MessageSavingSSEWriter) SendStageStart(stageID, stageName string, stageType StageType) {
+	m.saveMsg("info", "▶ "+stageName, "", "", 0, "")
+	m.inner.SendStageStart(stageID, stageName, stageType)
+}
+
+func (m *MessageSavingSSEWriter) SendStageDone(stageID string) {
+	m.inner.SendStageDone(stageID)
+}
+
+func (m *MessageSavingSSEWriter) SendWorkerStart(stageID, workerName, workerDisplay string) {
+	m.saveMsg("step", workerDisplay, "", "", 0, "")
+	m.inner.SendWorkerStart(stageID, workerName, workerDisplay)
+}
+
+func (m *MessageSavingSSEWriter) SendWorkerToken(workerName, content string) {
+	m.inner.SendWorkerToken(workerName, content)
+}
+
+func (m *MessageSavingSSEWriter) SendWorkerDone(workerName string) {
+	m.inner.SendWorkerDone(workerName)
+}
+
+func (m *MessageSavingSSEWriter) SendSynthStart(stageID string) {
+	m.saveMsg("info", "综合分析...", "", "", 0, "")
+	m.inner.SendSynthStart(stageID)
+}
+
+func (m *MessageSavingSSEWriter) SendSynthToken(content string) {
+	m.inner.SendSynthToken(content)
+}
+
+func (m *MessageSavingSSEWriter) SendSynthDone(stageID string) {
+	m.inner.SendSynthDone(stageID)
+}
+
+func (m *MessageSavingSSEWriter) SendStep(step int, name string) {
+	m.saveMsg("step", "", "", "", step, name)
+	m.inner.SendStep(step, name)
+}
+
+func (m *MessageSavingSSEWriter) SendInfo(content string) {
+	m.saveMsg("info", content, "", "", 0, "")
+	m.inner.SendInfo(content)
+}
+
+func (m *MessageSavingSSEWriter) SendOutline(data any) {
+	dataJSON, _ := json.Marshal(data)
+	m.saveMsg("outline", "", string(dataJSON), "", 0, "")
+	m.inner.SendOutline(data)
+}
+
+func (m *MessageSavingSSEWriter) SendAction(prompt string, options []string) {
+	optionsJSON, _ := json.Marshal(options)
+	m.saveMsg("action", prompt, "", string(optionsJSON), 0, "")
+	m.inner.SendAction(prompt, options)
+}
+
+func (m *MessageSavingSSEWriter) SendSimilarity(data any) {
+	dataJSON, _ := json.Marshal(data)
+	m.saveMsg("similarity", "", string(dataJSON), "", 0, "")
+	m.inner.SendSimilarity(data)
+}
+
+func (m *MessageSavingSSEWriter) SendFinalDraft(content string) {
+	// Save the final draft content as a text message for conversation history
+	m.saveMsg("text", content, "", "", 0, "")
+	m.inner.SendFinalDraft(content)
+}
+
+func (m *MessageSavingSSEWriter) SendComplete(scriptID uint) {
+	m.inner.SendComplete(scriptID)
+}
+
+func (m *MessageSavingSSEWriter) SendError(message string) {
+	m.saveMsg("error", message, "", "", 0, "")
+	m.inner.SendError(message)
 }

@@ -10,7 +10,6 @@ import { sendMessage, resetSession } from '../api/chat'
 import { getConversation, type Conversation } from '../api/conversations'
 import { getScript } from '../api/scripts'
 import { parseSSELine } from '../lib/sse'
-import type { WorkerStream } from '../components/create/ParallelStageView'
 import { getStyleDoc } from '../api/style'
 import { StyleInitBanner } from '../components/StyleInitBanner'
 
@@ -57,38 +56,24 @@ interface DashState {
   scriptText: string
   scriptId: number | null
   sending: boolean
-  currentStage: { id: string; name: string; type: string } | null
-  activeWorkers: Map<string, WorkerStream>
-  synthContent: string
-  synthStatus: 'idle' | 'running' | 'done'
-  currentStep: number
-  totalSteps: number
 }
 
 type Action =
   | { type: 'RESET' }
   | { type: 'SEND'; text: string }
   | { type: 'ADD_MSG'; msg: ChatMsg }
-  | { type: 'APPEND_TOKEN'; content: string }
+  | { type: 'UPDATE_LAST_MSG'; content: string }
   | { type: 'SET_STAGE'; stage: Stage }
   | { type: 'SET_OUTLINE'; text: string }
   | { type: 'SET_SCRIPT'; text: string; scriptId: number | null }
   | { type: 'STREAM_DONE' }
   | { type: 'RESTORE'; messages: ChatMsg[]; stage: Stage }
   | { type: 'UPDATE_OUTLINE'; text: string }
-  | { type: 'STAGE_START'; stage_id: string; stage_name: string; stage_type: string }
-  | { type: 'STAGE_DONE'; stage_id: string }
-  | { type: 'WORKER_START'; stage_id: string; worker_name: string; worker_display: string }
-  | { type: 'WORKER_TOKEN'; worker_name: string; content: string }
-  | { type: 'WORKER_DONE'; worker_name: string }
-  | { type: 'SYNTH_START' }
-  | { type: 'SYNTH_TOKEN'; content: string }
-  | { type: 'SYNTH_DONE' }
 
 function reducer(state: DashState, action: Action): DashState {
   switch (action.type) {
     case 'RESET':
-      return { stage: 'idle', messages: [], outlineText: '', scriptText: '', scriptId: null, sending: false, currentStage: null, activeWorkers: new Map(), synthContent: '', synthStatus: 'idle', currentStep: 0, totalSteps: 0 }
+      return { stage: 'idle', messages: [], outlineText: '', scriptText: '', scriptId: null, sending: false }
     case 'SEND':
       return {
         ...state,
@@ -98,28 +83,11 @@ function reducer(state: DashState, action: Action): DashState {
       }
     case 'ADD_MSG':
       return { ...state, messages: [...state.messages, action.msg] }
-    case 'APPEND_TOKEN': {
+    case 'UPDATE_LAST_MSG': {
       const msgs = [...state.messages]
       const last = msgs[msgs.length - 1]
-      const QUALITY_MARKER = '---QUALITY_CHECK_START---'
-      const OUTLINE_START = '---OUTLINE_START---'
-      const OUTLINE_END = '---OUTLINE_END---'
-      let newContent = (last?.streaming ? (last.content ?? '') : '') + action.content
-      // Strip inline outline block
-      const osIdx = newContent.indexOf(OUTLINE_START)
-      if (osIdx !== -1) {
-        const oeIdx = newContent.indexOf(OUTLINE_END)
-        newContent = oeIdx !== -1
-          ? (newContent.slice(0, osIdx) + newContent.slice(oeIdx + OUTLINE_END.length)).trimStart()
-          : newContent.slice(0, osIdx)
-      }
-      // Strip quality check section
-      const markerIdx = newContent.indexOf(QUALITY_MARKER)
-      if (markerIdx !== -1) newContent = newContent.slice(0, markerIdx)
-      if (last?.streaming) {
-        msgs[msgs.length - 1] = { ...last, content: newContent }
-      } else {
-        msgs.push({ id: `${Date.now()}-t`, type: 'ai', content: newContent, streaming: true })
+      if (last) {
+        msgs[msgs.length - 1] = { ...last, content: action.content }
       }
       return { ...state, messages: msgs }
     }
@@ -137,61 +105,6 @@ function reducer(state: DashState, action: Action): DashState {
       return { ...state, messages: action.messages, stage: action.stage, sending: false }
     case 'UPDATE_OUTLINE':
       return { ...state, outlineText: action.text }
-    case 'STAGE_START':
-      return {
-        ...state,
-        currentStage: { id: action.stage_id, name: action.stage_name, type: action.stage_type },
-        activeWorkers: new Map(),
-        synthContent: '',
-        synthStatus: 'idle',
-        currentStep: state.currentStep + 1,
-      }
-    case 'STAGE_DONE': {
-      if (state.currentStage?.type === 'parallel') {
-        const workers = Array.from(state.activeWorkers.values())
-        const msg: ChatMsg = {
-          id: `${Date.now()}-ps`,
-          type: 'parallel_stage',
-          content: state.currentStage.name,
-          workers,
-          synthContent: state.synthContent,
-        }
-        return { ...state, messages: [...state.messages, msg], currentStage: null }
-      }
-      return { ...state, currentStage: null }
-    }
-    case 'WORKER_START': {
-      const newWorkers = new Map(state.activeWorkers)
-      newWorkers.set(action.worker_name, {
-        name: action.worker_name,
-        displayName: action.worker_display,
-        content: '',
-        status: 'running',
-      })
-      return { ...state, activeWorkers: newWorkers }
-    }
-    case 'WORKER_TOKEN': {
-      const newWorkers = new Map(state.activeWorkers)
-      const worker = newWorkers.get(action.worker_name)
-      if (worker) {
-        newWorkers.set(action.worker_name, { ...worker, content: worker.content + action.content })
-      }
-      return { ...state, activeWorkers: newWorkers }
-    }
-    case 'WORKER_DONE': {
-      const newWorkers = new Map(state.activeWorkers)
-      const worker = newWorkers.get(action.worker_name)
-      if (worker) {
-        newWorkers.set(action.worker_name, { ...worker, status: 'done' })
-      }
-      return { ...state, activeWorkers: newWorkers }
-    }
-    case 'SYNTH_START':
-      return { ...state, synthStatus: 'running', synthContent: '' }
-    case 'SYNTH_TOKEN':
-      return { ...state, synthContent: state.synthContent + action.content }
-    case 'SYNTH_DONE':
-      return { ...state, synthStatus: 'done' }
     default:
       return state
   }
@@ -200,14 +113,14 @@ function reducer(state: DashState, action: Action): DashState {
 export function Dashboard() {
   const [state, dispatch] = useReducer(reducer, {
     stage: 'idle', messages: [], outlineText: '', scriptText: '', scriptId: null, sending: false,
-    currentStage: null, activeWorkers: new Map(), synthContent: '', synthStatus: 'idle', currentStep: 0, totalSteps: 0,
   })
   const [initialInput, setInitialInput] = useState('')
   const [activeConvId, setActiveConvId] = useState<number | undefined>()
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [styleInitialized, setStyleInitialized] = useState<boolean | null>(null)
-  const streamingTextRef = useRef('')  // accumulate token content for ScriptEditor
-  const currentStageTypeRef = useRef<string | null>(null)  // track stage type for serial worker_token → APPEND_TOKEN
+  const streamingTextRef = useRef('')
+  const streamingMsgIdRef = useRef<string | null>(null)
+  const flushTimerRef = useRef<number | null>(null)
 
   // Check style initialization on mount
   useEffect(() => {
@@ -216,8 +129,45 @@ export function Dashboard() {
       .catch(() => setStyleInitialized(false))
   }, [])
 
+  // Flush streaming content to state (called periodically)
+  const flushStreamingContent = useCallback(() => {
+    if (streamingMsgIdRef.current && streamingTextRef.current) {
+      const QUALITY_MARKER = '---QUALITY_CHECK_START---'
+      const OUTLINE_START = '---OUTLINE_START---'
+      const OUTLINE_END = '---OUTLINE_END---'
+      let content = streamingTextRef.current
+      // Strip inline outline block
+      const osIdx = content.indexOf(OUTLINE_START)
+      if (osIdx !== -1) {
+        const oeIdx = content.indexOf(OUTLINE_END)
+        content = oeIdx !== -1
+          ? (content.slice(0, osIdx) + content.slice(oeIdx + OUTLINE_END.length)).trimStart()
+          : content.slice(0, osIdx)
+      }
+      // Strip quality check section
+      const markerIdx = content.indexOf(QUALITY_MARKER)
+      if (markerIdx !== -1) content = content.slice(0, markerIdx)
+      dispatch({ type: 'UPDATE_LAST_MSG', content })
+    }
+  }, [])
+
+  // Schedule a flush
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current) return
+    flushTimerRef.current = window.setTimeout(() => {
+      flushStreamingContent()
+      flushTimerRef.current = null
+    }, 100) // Flush every 100ms
+  }, [flushStreamingContent])
+
   const runSSE = useCallback(async (message: string, convId?: number) => {
     streamingTextRef.current = ''
+    streamingMsgIdRef.current = null
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
+    }
+
     try {
       const res = await sendMessage(message, convId)
       if (!res.ok) {
@@ -243,8 +193,13 @@ export function Dashboard() {
           if (!event) continue
           switch (event.type) {
             case 'token':
+              if (!streamingMsgIdRef.current) {
+                // Start a new streaming message if not already
+                streamingMsgIdRef.current = `${Date.now()}-t`
+                dispatch({ type: 'ADD_MSG', msg: { id: streamingMsgIdRef.current, type: 'ai', content: '', streaming: true } })
+              }
               streamingTextRef.current += event.content
-              dispatch({ type: 'APPEND_TOKEN', content: event.content })
+              scheduleFlush()
               break
             case 'step':
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-s`, type: 'step', content: `Step ${event.step}：${event.name}` } })
@@ -263,11 +218,15 @@ export function Dashboard() {
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-sim`, type: 'similarity', data: event.data } })
               break
             case 'final_draft':
-              // Quality gate retried and produced a better draft — replace streamed content
               streamingTextRef.current = event.content
               dispatch({ type: 'SET_SCRIPT', text: event.content, scriptId: null })
               break
             case 'complete': {
+              if (flushTimerRef.current) {
+                clearTimeout(flushTimerRef.current)
+                flushTimerRef.current = null
+              }
+              flushStreamingContent()
               const QUALITY_MARKER = '---QUALITY_CHECK_START---'
               const idx = streamingTextRef.current.indexOf(QUALITY_MARKER)
               const cleanText = idx !== -1
@@ -280,35 +239,46 @@ export function Dashboard() {
             case 'error':
               dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-e`, type: 'error', content: event.message } })
               break
+            // Worker events - treat as normal streaming text for serial stages
             case 'stage_start':
-              currentStageTypeRef.current = event.stage_type
-              dispatch({ type: 'STAGE_START', stage_id: event.stage_id, stage_name: event.stage_name, stage_type: event.stage_type })
+              dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-ss`, type: 'info', content: `▶ ${event.stage_name}` } })
               break
             case 'stage_done':
-              currentStageTypeRef.current = null
-              dispatch({ type: 'STAGE_DONE', stage_id: event.stage_id })
               break
             case 'worker_start':
-              dispatch({ type: 'WORKER_START', stage_id: event.stage_id, worker_name: event.worker_name, worker_display: event.worker_display })
+              dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-ws`, type: 'step', content: event.worker_display } })
+              // Start streaming message
+              streamingTextRef.current = ''
+              streamingMsgIdRef.current = `${Date.now()}-w`
+              dispatch({ type: 'ADD_MSG', msg: { id: streamingMsgIdRef.current, type: 'ai', content: '', streaming: true } })
               break
             case 'worker_token':
-              dispatch({ type: 'WORKER_TOKEN', worker_name: event.worker_name, content: event.content })
-              if (currentStageTypeRef.current === 'serial') {
-                streamingTextRef.current += event.content
-                dispatch({ type: 'APPEND_TOKEN', content: event.content })
-              }
+              streamingTextRef.current += event.content
+              scheduleFlush()
               break
             case 'worker_done':
-              dispatch({ type: 'WORKER_DONE', worker_name: event.worker_name })
+              if (flushTimerRef.current) {
+                clearTimeout(flushTimerRef.current)
+                flushTimerRef.current = null
+              }
+              flushStreamingContent()
+              dispatch({ type: 'STREAM_DONE' })
+              streamingMsgIdRef.current = null
               break
             case 'synth_start':
-              dispatch({ type: 'SYNTH_START' })
+              dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-syn`, type: 'info', content: '综合分析...' } })
               break
             case 'synth_token':
-              dispatch({ type: 'SYNTH_TOKEN', content: event.content })
+              streamingTextRef.current += event.content
+              scheduleFlush()
               break
             case 'synth_done':
-              dispatch({ type: 'SYNTH_DONE' })
+              if (flushTimerRef.current) {
+                clearTimeout(flushTimerRef.current)
+                flushTimerRef.current = null
+              }
+              flushStreamingContent()
+              dispatch({ type: 'STREAM_DONE' })
               break
           }
         }
@@ -317,10 +287,15 @@ export function Dashboard() {
       const msg = e instanceof Error ? e.message : '连接失败'
       dispatch({ type: 'ADD_MSG', msg: { id: `${Date.now()}-e`, type: 'error', content: msg } })
     } finally {
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current)
+        flushTimerRef.current = null
+      }
+      flushStreamingContent()
       dispatch({ type: 'STREAM_DONE' })
       setRefreshTrigger((n) => n + 1)
     }
-  }, [])
+  }, [flushStreamingContent, scheduleFlush])
 
   const handleSend = useCallback(async (text: string) => {
     if (state.sending) return
@@ -352,7 +327,6 @@ export function Dashboard() {
         options?: string[]; step?: number; name?: string
       }>
       const QUALITY_MARKER = '---QUALITY_CHECK_START---'
-      // Skip meta messages (outline/complete) that have no visible chat content
       const msgs: ChatMsg[] = stored
         .filter(m => m.type !== 'complete')
         .map((m, i) => {
@@ -384,13 +358,11 @@ export function Dashboard() {
       dispatch({ type: 'RESTORE', messages: msgs, stage })
       setActiveConvId(conv.id)
 
-      // Restore outline for awaiting state
       const outlineMsg = stored.find(m => m.type === 'outline')
       if (outlineMsg?.data && fullConv.state !== 1) {
         dispatch({ type: 'SET_OUTLINE', text: formatOutline(outlineMsg.data) })
       }
 
-      // Load script for completed state
       if (fullConv.state === 1 && fullConv.script_id) {
         try {
           const scriptData = await getScript(fullConv.script_id)
@@ -447,7 +419,7 @@ export function Dashboard() {
             </div>
             <p className="text-sm text-gray-400 px-2">{initialInput.length} 字</p>
             <div className="text-center pb-16 mt-8 text-sm text-gray-400">
-              💡 提示：提供参考文案可以帮助 AI 更好地理解你想要的风格
+              提示：提供参考文案可以帮助 AI 更好地理解你想要的风格
             </div>
           </div>
         </div>
@@ -455,20 +427,22 @@ export function Dashboard() {
     )
   }
 
-  // Chat state: left chat panel + right preview (no sidebar)
+  // Chat state: left chat panel + right preview
   return (
     <div className="h-full flex overflow-hidden bg-gray-100 dark:bg-gray-950 gap-4 p-4">
       {/* Left: chat panel */}
-      <div className="w-full md:w-2/5 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
+      <div className="w-full md:w-1/2 flex flex-col bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden">
         {/* Top toolbar */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
           <button
+            data-testid="back-to-idle-btn"
             onClick={() => dispatch({ type: 'RESET' })}
             className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <button
+            data-testid="new-chat-btn"
             onClick={handleNewChat}
             className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
           >

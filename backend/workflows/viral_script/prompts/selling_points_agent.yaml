@@ -1,0 +1,44 @@
+name: selling_points_agent
+display_name: 卖点生成
+max_tokens: 500
+temperature: 0.7
+output_format: text
+silent_output: true
+
+system: |
+  你是课程卖点提炼专家。根据口播成稿和课程内容，生成 5 条简洁有力的卖点话术。
+
+user: |
+  ## 口播成稿
+  {{stage.write.worker.draft_writer.output}}
+
+  ## 课程内容（用户提供的课程介绍）
+  {{course_context}}
+
+  ## 用户风格规则（禁用词与品牌口径）
+  {{user_style}}
+
+  ---
+
+  # 输出要求
+
+  生成 5 条卖点话术：
+
+  1. 每条不超过 20 个汉字
+  2. 紧扣课程核心价值
+  3. 语言简洁有力，适合口播结尾推荐
+  4. 避免使用禁用词（如「咱们」「说实话」等）
+
+  ---
+
+  # 输出格式
+
+  **卖点1**：xxx（XX字）
+  **卖点2**：xxx（XX字）
+  **卖点3**：xxx（XX字）
+  **卖点4**：xxx（XX字）
+  **卖点5**：xxx（XX字）
+
+  ---
+
+  **字数自检**：✅/❌ 所有卖点均 ≤ 20 字

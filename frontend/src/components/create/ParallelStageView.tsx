@@ -33,11 +33,12 @@ export function ParallelStageView({ stageName, workers, synthContent, synthStatu
           <span className="text-xs font-medium text-gray-500">
             {synthStatus === 'running' ? '汇总分析中...' : '汇总完成'}
           </span>
-          {synthStatus === 'done' && synthContent && (
-            <div className="mt-1 text-sm text-gray-600 whitespace-pre-wrap max-h-40 overflow-y-auto">
-              {synthContent}
-            </div>
-          )}
+          <div className="mt-1 text-sm text-gray-600 whitespace-pre-wrap max-h-40 overflow-y-auto">
+            {synthContent || (synthStatus === 'running' ? '...' : '')}
+            {synthStatus === 'running' && synthContent && (
+              <span className="inline-block w-0.5 h-4 ml-0.5 bg-blue-500 animate-pulse align-middle" />
+            )}
+          </div>
         </div>
       )}
     </div>

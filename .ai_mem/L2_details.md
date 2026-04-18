@@ -6,6 +6,30 @@
 
 ## 会话状态机详细流程
 
+### SendMessage 恢复机制（Phase 1）
+
+```go
+// SendMessage 开始时检查并恢复 session 状态
+if activeWorkflowID == 0 {
+    pausedWf := repository.GetActiveWorkflow(userID) // 查找 paused 状态的 workflow
+    if pausedWf.Status == "paused" {
+        activeWorkflowID = pausedWf.ID
+        sess.ActiveWorkflowID = pausedWf.ID
+        // 从 Workflow.ConvID 或 InputJSON 恢复 convID
+        if pausedWf.ConvID != nil && *pausedWf.ConvID > 0 {
+            convID = *pausedWf.ConvID
+        } else {
+            // Fallback: 从 InputJSON 解析
+            var input WorkflowInput
+            json.Unmarshal(pausedWf.InputJSON, &input)
+            convID = input.ConvID
+        }
+        sess.ConvID = convID
+        sess.SetState(StateAwaiting)
+    }
+}
+```
+
 ### handleIdle（StateIdle → StateAnalyzing → StateAwaiting）
 
 ```go
@@ -213,10 +237,30 @@ location /creator/ {
 2. 如需全局状态：在 `stores/` 添加 Pinia store
 3. 组件放 `components/`，页面放 `views/`
 
-### 新增AI处理步骤
-1. `service/prompts.go` 添加新 Prompt builder
-2. `handler/chat_handler.go` 在对应阶段调用 `StreamClaude` 或 `CallClaude`
-3. 新增 SSE event type 需同时更新前端 `chat.ts` 的 `handleEvent` 和 `restoreMessages`
+### 新增 Workflow Stage
+1. 在 `workflows/viral_script/workflow.yaml` 添加新阶段定义
+2. 在 `workflows/viral_script/prompts/` 创建 worker prompt YAML
+3. 如需条件跳过：设置 `skip_if` 表达式
+4. 如需新 SSE event type：更新 `sse.go` 和前端处理
+5. 如需静默执行（不流式输出）：在 prompt YAML 添加 `silent_output: true`
+
+### skip_if 条件语法
+```yaml
+skip_if: "{{stage.X.worker.Y.output.field}} == false"
+```
+- 支持 `==` 和 `!=` 操作符
+- 变量值从 `buildVarsMap` 解析
+- JSON 字段自动提取（如 `need_material` 从 `{"need_material": true}`）
+
+### silent_output 控制流式输出
+```yaml
+# prompt YAML 中添加
+silent_output: true  # 不发送 worker_token，只显示进度
+```
+- 默认：流式输出（发送 worker_token SSE）
+- `silent_output: true`：静默执行，只发送 worker_start 和 worker_done
+- 适用场景：中间分析阶段，用户不需要看到详细过程
+- draft_writer 保持流式输出，用户可实时看到稿子生成
 
 ### 构建与部署
 ```bash

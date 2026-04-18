@@ -269,14 +269,17 @@ workflows/viral_script/
 
 | 阶段 | ID | 类型 | Workers | 说明 |
 |------|-----|------|---------|------|
-| 研究分析 | `research` | parallel | `viral_decoder` | 仅爆款解构，无 synth |
-| 素材需求判断 | `material_check` | serial | `material_check` | 输出 `need_material: true/false` |
-| 素材补齐 | `material_curator` | serial | `material_curator` | **skip_if**：`need_material == false` 时跳过 |
-| 大纲创作 | `create` | serial | `creative_agent` | 基于 viral_decoder + 素材生成大纲 |
-| 优化审查 | `optimize` | serial | `optimization_agent` | 审查大纲，辩论决策 |
+| 研究分析 | `research` | parallel | `viral_decoder` | 仅爆款解构，无 synth，**silent_output** |
+| 素材需求判断 | `material_check` | serial | `material_check` | 输出 `need_material: true/false`，**silent_output** |
+| 素材补齐 | `material_curator` | serial | `material_curator` | **skip_if**：`need_material == false` 时跳过，**silent_output** |
+| 大纲创作 | `create` | serial | `creative_agent` | 基于 viral_decoder + 素材生成大纲，**silent_output** |
+| 优化审查 | `optimize` | serial | `optimization_agent` | 审查大纲，辩论决策，**silent_output** |
 | 确认大纲 | `confirm_outline` | human | - | 用户选择：1-确认 2-调整 3-更换素材 4-重新 |
-| 撰写终稿 | `write` | serial | `draft_writer` | 按大纲撰写口播稿 |
-| 相似度检测 | `similarity` | serial | `similarity_checker` | 输出相似度评分 JSON |
+| 撰写终稿 | `write` | serial | `draft_writer` | 按大纲撰写口播稿，**流式输出** |
+| 文章质检 | `quality_check` | serial | `quality_checker` | 质检评分 + 相似度检测，**silent_output** |
+| 卖点生成 | `selling_points` | serial | `selling_points_agent` | 需要 course_context，**silent_output** |
+
+**silent_output 说明**：设置 `silent_output: true` 的 worker 不流式发送 worker_token SSE 消息，只显示进度。只有 `draft_writer` 保持流式输出，用户可实时看到完整稿子生成过程。
 
 ### 用户选择映射（resume 逻辑）
 

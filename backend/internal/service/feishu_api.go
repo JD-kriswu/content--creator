@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 )
@@ -86,8 +87,11 @@ func (a *FeishuAPI) CreateCard(chatID string, cardJSON string) (string, error) {
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("[FeishuAPI] CreateCard response: %s", string(respBody))
+
 	var result struct {
 		Code int    `json:"code"`
+		Msg  string `json:"msg"`
 		Data struct {
 			MessageID string `json:"message_id"`
 		} `json:"data"`
@@ -95,7 +99,7 @@ func (a *FeishuAPI) CreateCard(chatID string, cardJSON string) (string, error) {
 	json.Unmarshal(respBody, &result)
 
 	if result.Code != 0 {
-		return "", fmt.Errorf("create card failed: code %d", result.Code)
+		return "", fmt.Errorf("create card failed: code %d msg %s", result.Code, result.Msg)
 	}
 	return result.Data.MessageID, nil
 }
@@ -125,4 +129,54 @@ func (a *FeishuAPI) UpdateCard(messageID string, cardJSON string) error {
 	defer resp.Body.Close()
 
 	return nil
+}
+
+// SendText sends a simple text message to a chat
+func (a *FeishuAPI) SendText(chatID string, text string) (string, error) {
+	token, err := a.GetToken()
+	if err != nil {
+		return "", err
+	}
+
+	url := feishuAPIBase + "/im/v1/messages?receive_id_type=chat_id"
+
+	// Feishu text message: content is a JSON string containing "text" field
+	contentJSON, _ := json.Marshal(map[string]string{"text": text})
+
+	body := map[string]interface{}{
+		"receive_id": chatID,
+		"msg_type":   "text",
+		"content":    string(contentJSON), // Must be a string, not RawMessage
+	}
+
+	reqBody, _ := json.Marshal(body)
+	log.Printf("[FeishuAPI] SendText request: %s", string(reqBody))
+
+	req, _ := http.NewRequest("POST", url, bytes.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("[FeishuAPI] SendText response: %s", string(respBody))
+
+	var result struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			MessageID string `json:"message_id"`
+		} `json:"data"`
+	}
+	json.Unmarshal(respBody, &result)
+
+	if result.Code != 0 {
+		return "", fmt.Errorf("send text failed: code %d msg %s", result.Code, result.Msg)
+	}
+	return result.Data.MessageID, nil
 }

@@ -5,27 +5,43 @@ meta:
   word_count: "300-600"
 
 stages:
+  # Stage 1: research - only viral_decoder
   - id: research
     display_name: 研究分析
     type: parallel
     workers:
       - viral_decoder
-      - style_architect
-      - material_curator
-    synth_prompt: synth/research_synth.yaml
 
+  # Stage 2: material_check - judge if need supplementary materials
+  - id: material_check
+    display_name: 素材需求判断
+    type: serial
+    workers:
+      - material_check
+
+  # Stage 3: material_curator - conditional execution
+  - id: material_curator
+    display_name: 素材补齐
+    type: serial
+    workers:
+      - material_curator
+    skip_if: "{{stage.material_check.worker.material_check.output.need_material}} == false"
+
+  # Stage 4: create - outline creation
   - id: create
     display_name: 大纲创作
     type: serial
     workers:
       - creative_agent
 
+  # Stage 5: optimize - optimization review
   - id: optimize
     display_name: 优化审查
     type: serial
     workers:
       - optimization_agent
 
+  # Stage 6: confirm_outline - human confirmation
   - id: confirm_outline
     display_name: 确认大纲
     type: human
@@ -36,14 +52,24 @@ stages:
       - "更换素材"
       - "重新分析"
 
+  # Stage 7: write - final draft
   - id: write
     display_name: 撰写终稿
     type: serial
     workers:
       - draft_writer
 
-  - id: similarity
-    display_name: 相似度检测
+  # Stage 8: quality_check - quality check with similarity detection
+  - id: quality_check
+    display_name: 文章质检
     type: serial
     workers:
-      - similarity_checker
+      - quality_checker
+
+  # Stage 9: selling_points - generate selling points (optional, requires course_context)
+  - id: selling_points
+    display_name: 卖点生成
+    type: serial
+    workers:
+      - selling_points_agent
+    skip_if: "{{course_context}} == ''"

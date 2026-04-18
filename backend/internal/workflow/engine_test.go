@@ -29,6 +29,7 @@ func (m *MockSSEWriter) SendInfo(content string)               {}
 func (m *MockSSEWriter) SendOutline(data any)                  {}
 func (m *MockSSEWriter) SendAction(_ string, options []string) {}
 func (m *MockSSEWriter) SendSimilarity(data any)               {}
+func (m *MockSSEWriter) SendFinalDraft(content string)         {}
 func (m *MockSSEWriter) SendComplete(scriptID uint)            {}
 func (m *MockSSEWriter) SendError(message string)              {}
 

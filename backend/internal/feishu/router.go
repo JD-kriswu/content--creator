@@ -50,15 +50,33 @@ func (r *Router) HandleEvent(event WSEvent) {
 
 // handleMessage processes im.message.receive_v1 events.
 func (r *Router) handleMessage(wsEvent WSEvent, bot *model.FeishuBot) {
+	// Feishu WebSocket payload structure:
+	// {"schema":"2.0","header":{...},"event":{...}}
+	var fullPayload struct {
+		Schema string          `json:"schema"`
+		Header json.RawMessage `json:"header"`
+		Event  json.RawMessage `json:"event"`
+	}
+	if err := json.Unmarshal(wsEvent.Event, &fullPayload); err != nil {
+		log.Printf("[FeishuRouter] failed to parse full payload: %v", err)
+		return
+	}
+
+	// Debug: log raw event
+	log.Printf("[FeishuRouter] raw event: %s", string(fullPayload.Event)[:min(500, len(fullPayload.Event))])
+
+	// Parse the actual event data
 	var msgEvent MessageEvent
-	if err := json.Unmarshal(wsEvent.Event, &msgEvent); err != nil {
+	if err := json.Unmarshal(fullPayload.Event, &msgEvent); err != nil {
 		log.Printf("[FeishuRouter] failed to parse message event: %v", err)
 		return
 	}
 
 	chatID := msgEvent.Message.ChatID
-	openID := msgEvent.Sender.OpenID
+	openID := msgEvent.Sender.SenderID.OpenID
 	content := msgEvent.Message.Content
+
+	log.Printf("[FeishuRouter] message from chat=%s open_id=%s content=%s", chatID, openID, content[:min(100, len(content))])
 
 	// Check if session is busy (analyzing/writing)
 	sessMgr := service.GetFeishuSessionMgr()
@@ -90,6 +108,13 @@ func (r *Router) handleMessage(wsEvent WSEvent, bot *model.FeishuBot) {
 	}
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // handleIdle processes messages when session is idle (start new workflow).
 func (r *Router) handleIdle(chatID string, bot *model.FeishuBot, feishuUser *model.FeishuUser, content string, sess *service.FeishuSession) {
 	// Parse message content (飞书消息内容是 JSON string)
@@ -98,6 +123,8 @@ func (r *Router) handleIdle(chatID string, bot *model.FeishuBot, feishuUser *mod
 		log.Printf("[FeishuRouter] empty message content from %s", chatID)
 		return
 	}
+
+	log.Printf("[FeishuRouter] received text: %s", text)
 
 	// Get or create feishu conversation mapping
 	_, convID, err := repository.GetOrCreateFeishuConv(bot.ID, chatID, feishuUser.UserID)
@@ -110,12 +137,11 @@ func (r *Router) handleIdle(chatID string, bot *model.FeishuBot, feishuUser *mod
 	sessMgr := service.GetFeishuSessionMgr()
 	sessMgr.SetConvID(chatID, convID)
 
-	// Create SSE writer for Feishu card updates
-	sseW := NewFeishuSSEWriter(chatID, bot.AppID, bot.AppSecret, 500) // 500ms throttle
-	if err := sseW.Init(); err != nil {
-		log.Printf("[FeishuRouter] failed to init SSE writer: %v", err)
-		return
-	}
+	// Create text-based SSE writer for Feishu updates
+	sseW := NewFeishuTextSSEWriter(chatID, bot.AppID, bot.AppSecret, 2000) // 2s throttle
+
+	// Send initial status
+	sseW.SendInfo("收到您的消息，开始处理...")
 
 	// Extract text from URL if needed
 	var sourceText, sourceURL string
@@ -163,6 +189,7 @@ func (r *Router) handleIdle(chatID string, bot *model.FeishuBot, feishuUser *mod
 		sessMgr.SetState(chatID, service.FeishuAwaiting)
 	} else if err != nil {
 		sessMgr.SetState(chatID, service.FeishuIdle)
+		sseW.SendError(err.Error())
 	} else {
 		sessMgr.SetState(chatID, service.FeishuIdle)
 	}
@@ -176,10 +203,14 @@ func (r *Router) handleAwaiting(chatID string, bot *model.FeishuBot, content str
 		return
 	}
 
+	log.Printf("[FeishuRouter] awaiting state, received: %s", text)
+
 	// Check if user wants to cancel/start new
-	if strings.Contains(text, "取消") || strings.Contains(text, "重新") {
+	if strings.Contains(text, "取消") || strings.Contains(text, "重新") || strings.Contains(text, "重来") {
 		// Clear session and let user start fresh
 		service.GetFeishuSessionMgr().Clear(chatID)
+		api := service.NewFeishuAPI(bot.AppID, bot.AppSecret)
+		api.SendText(chatID, "已取消，请重新发送内容开始创作")
 		return
 	}
 
@@ -190,12 +221,9 @@ func (r *Router) handleAwaiting(chatID string, bot *model.FeishuBot, content str
 		return
 	}
 
-	// Create SSE writer for card updates
-	sseW := NewFeishuSSEWriter(chatID, bot.AppID, bot.AppSecret, 500)
-	if err := sseW.Init(); err != nil {
-		log.Printf("[FeishuRouter] failed to init SSE writer: %v", err)
-		return
-	}
+	// Create text-based SSE writer for updates
+	sseW := NewFeishuTextSSEWriter(chatID, bot.AppID, bot.AppSecret, 2000)
+	sseW.SendInfo("收到您的选择，继续生成...")
 
 	// Update session state to writing
 	sessMgr := service.GetFeishuSessionMgr()
@@ -210,6 +238,7 @@ func (r *Router) handleAwaiting(chatID string, bot *model.FeishuBot, content str
 		sessMgr.SetState(chatID, service.FeishuAwaiting)
 	} else if err != nil {
 		sessMgr.SetState(chatID, service.FeishuIdle)
+		sseW.SendError(err.Error())
 	} else {
 		sessMgr.SetState(chatID, service.FeishuIdle)
 	}

@@ -20,6 +20,8 @@ type Engine struct {
 	ctx        *WorkflowContext
 	input      WorkflowInput
 	workflowID uint
+	skipStages []string    // 路由层指定的跳过阶段列表
+	jumpAfter  string      // 特殊：在此阶段完成后跳到 write
 }
 
 // NewEngine creates a new workflow engine.
@@ -35,6 +37,26 @@ func (e *Engine) WorkflowID() uint {
 	return e.workflowID
 }
 
+// findStageIndex 根据阶段 ID 找到阶段索引
+func (e *Engine) findStageIndex(stageID string) int {
+	for i, s := range e.def.Stages {
+		if s.ID == stageID {
+			return i
+		}
+	}
+	return -1
+}
+
+// shouldSkipByRoute 检查阶段是否在路由层指定的跳过列表中
+func (e *Engine) shouldSkipByRoute(stageID string) bool {
+	for _, skipID := range e.skipStages {
+		if skipID == stageID {
+			return true
+		}
+	}
+	return false
+}
+
 // Start loads a workflow definition, creates a DB record, and begins execution.
 func (e *Engine) Start(workflowType string, input WorkflowInput) error {
 	def, err := e.loader.Load(workflowType)
@@ -44,11 +66,20 @@ func (e *Engine) Start(workflowType string, input WorkflowInput) error {
 	e.def = def
 	e.input = input
 
+	// Inject runtime meta
+	workflowMeta := def.Meta
+	if workflowMeta == nil {
+		workflowMeta = make(map[string]any)
+	}
+	workflowMeta["current_date"] = time.Now().Format("2006-01-02")
+
 	shared := SharedContext{
-		OriginalText: input.Text,
-		SourceURL:    input.SourceURL,
-		UserStyle:    input.UserStyle,
-		WorkflowMeta: def.Meta,
+		OriginalText:       input.Text,
+		SourceURL:          input.SourceURL,
+		UserStyle:          input.UserStyle,
+		WorkflowMeta:       workflowMeta,
+		CourseContext:      input.CourseContext,
+		FeedbackConstraint: input.FeedbackConstraint,
 	}
 	e.ctx = NewWorkflowContext(shared)
 
@@ -59,6 +90,7 @@ func (e *Engine) Start(workflowType string, input WorkflowInput) error {
 		Type:      workflowType,
 		Status:    "running",
 		InputJSON: string(inputJSON),
+		ConvID:    &input.ConvID, // Link workflow to conversation for recovery
 	}
 	if err := repository.CreateWorkflow(wf); err != nil {
 		return fmt.Errorf("create workflow record: %w", err)
@@ -66,6 +98,60 @@ func (e *Engine) Start(workflowType string, input WorkflowInput) error {
 	e.workflowID = wf.ID
 
 	return e.runStages(0)
+}
+
+// StartWithRoute 根据路由配置启动 workflow，从指定阶段开始执行
+func (e *Engine) StartWithRoute(workflowType string, input WorkflowInput, route RouteConfig) error {
+	def, err := e.loader.Load(workflowType)
+	if err != nil {
+		return fmt.Errorf("load workflow %s: %w", workflowType, err)
+	}
+	e.def = def
+	e.input = input
+
+	// 设置路由层指定的跳过阶段和跳跃配置
+	e.skipStages = route.SkipStages
+	e.jumpAfter = route.JumpAfter
+
+	// Inject runtime meta
+	workflowMeta := def.Meta
+	if workflowMeta == nil {
+		workflowMeta = make(map[string]any)
+	}
+	workflowMeta["current_date"] = time.Now().Format("2006-01-02")
+	workflowMeta["input_type"] = string(input.InputType) // 注入输入类型
+
+	shared := SharedContext{
+		OriginalText:       input.Text,
+		SourceURL:          input.SourceURL,
+		UserStyle:          input.UserStyle,
+		WorkflowMeta:       workflowMeta,
+		CourseContext:      input.CourseContext,
+		FeedbackConstraint: input.FeedbackConstraint,
+	}
+	e.ctx = NewWorkflowContext(shared)
+
+	// Create DB workflow record
+	inputJSON, _ := json.Marshal(input)
+	wf := &model.Workflow{
+		UserID:    input.UserID,
+		Type:      workflowType,
+		Status:    "running",
+		InputJSON: string(inputJSON),
+		ConvID:    &input.ConvID, // Link workflow to conversation for recovery
+	}
+	if err := repository.CreateWorkflow(wf); err != nil {
+		return fmt.Errorf("create workflow record: %w", err)
+	}
+	e.workflowID = wf.ID
+
+	// 找到起始阶段的索引
+	startIdx := e.findStageIndex(route.StartStageID)
+	if startIdx == -1 {
+		startIdx = 0 // 默认从第一个阶段开始
+	}
+
+	return e.runStages(startIdx)
 }
 
 // Resume restores a paused workflow and continues from the appropriate stage.
@@ -97,13 +183,25 @@ func (e *Engine) Resume(workflowID uint, humanInput string) error {
 		if err := json.Unmarshal([]byte(wf.ContextJSON), &shared); err != nil {
 			return fmt.Errorf("restore context: %w", err)
 		}
+		// Ensure current_date is updated on resume
+		if shared.WorkflowMeta == nil {
+			shared.WorkflowMeta = make(map[string]any)
+		}
+		shared.WorkflowMeta["current_date"] = time.Now().Format("2006-01-02")
 		e.ctx = NewWorkflowContext(shared)
 	} else {
+		// Inject runtime meta
+		workflowMeta := def.Meta
+		if workflowMeta == nil {
+			workflowMeta = make(map[string]any)
+		}
+		workflowMeta["current_date"] = time.Now().Format("2006-01-02")
+
 		shared := SharedContext{
 			OriginalText: e.input.Text,
 			SourceURL:    e.input.SourceURL,
 			UserStyle:    e.input.UserStyle,
-			WorkflowMeta: def.Meta,
+			WorkflowMeta: workflowMeta,
 		}
 		e.ctx = NewWorkflowContext(shared)
 	}
@@ -132,6 +230,19 @@ func (e *Engine) Resume(workflowID uint, humanInput string) error {
 func (e *Engine) runStages(startIdx int) error {
 	for i := startIdx; i < len(e.def.Stages); i++ {
 		stage := e.def.Stages[i]
+
+		// 检查路由层指定的跳过
+		if e.shouldSkipByRoute(stage.ID) {
+			e.sse.SendInfo(fmt.Sprintf("跳过阶段 %s（输入类型路由）", stage.DisplayName))
+			continue
+		}
+
+		// Check skip_if condition
+		if stage.SkipIf != "" && e.evaluateSkipCondition(stage.SkipIf) {
+			// Skip this stage, continue to next
+			e.sse.SendInfo(fmt.Sprintf("跳过阶段 %s（条件满足）", stage.DisplayName))
+			continue
+		}
 
 		switch stage.Type {
 		case StageParallel:
@@ -175,19 +286,62 @@ func (e *Engine) runStages(startIdx int) error {
 				return err
 			}
 		}
+
+		// 检查 jumpAfter：在指定阶段完成后跳到 write
+		if e.jumpAfter != "" && stage.ID == e.jumpAfter {
+			writeIdx := e.findStageIndex("write")
+			if writeIdx > i {
+				e.sse.SendInfo(fmt.Sprintf("原稿分析完成，跳过大纲阶段，直接进入撰写"))
+				// 更新循环索引，下次循环从 write 开始
+				i = writeIdx - 1 // -1 因为循环会 +1
+				continue
+			}
+		}
 	}
 
 	return e.finish()
 }
 
+// evaluateSkipCondition evaluates a skip_if expression like "{{stage.X.field}} == false".
+// Returns true if the condition is met (stage should be skipped).
+func (e *Engine) evaluateSkipCondition(expr string) bool {
+	// Parse expression: {{variable}} == value or {{variable}} != value
+	vars := buildVarsMap(e.ctx)
+
+	// Find the {{...}} placeholder
+	start := strings.Index(expr, "{{")
+	end := strings.Index(expr, "}}")
+	if start == -1 || end == -1 || end <= start {
+		return false
+	}
+
+	placeholder := expr[start+2 : end]
+	value := vars[placeholder]
+
+	// Extract the comparison operator and expected value
+	rest := strings.TrimSpace(expr[end+2:])
+
+	// Check for == or !=
+	if strings.HasPrefix(rest, "==") {
+		expected := strings.TrimSpace(strings.TrimPrefix(rest, "=="))
+		return value == expected
+	} else if strings.HasPrefix(rest, "!=") {
+		expected := strings.TrimSpace(strings.TrimPrefix(rest, "!="))
+		return value != expected
+	}
+
+	// Default: treat as boolean check
+	return value == "true" || value == "1"
+}
+
 // finish completes the workflow: for viral_script, saves the script and sends complete SSE.
 func (e *Engine) finish() error {
-	// Find the draft from the last serial/parallel stage output
+	// Find the draft from the write stage output (the final draft)
 	var draft string
 	var similarityScore float64
 
-	// Look for the create stage output (the draft)
-	if out, ok := e.ctx.StageOutputs["create"]; ok {
+	// Look for the write stage output (the final draft)
+	if out, ok := e.ctx.StageOutputs["write"]; ok {
 		draft = out.Summary
 	}
 	// Fallback: use the last stage's summary
@@ -208,6 +362,12 @@ func (e *Engine) finish() error {
 
 	// Save script if we have a draft
 	if draft != "" {
+		// Strip quality check marker before saving and sending
+		cleanDraft := service.StripQualityCheck(draft)
+
+		// Send the final draft content to frontend for display
+		e.sse.SendFinalDraft(cleanDraft)
+
 		script, err := service.SaveScriptFromWorkflow(
 			e.input.UserID,
 			e.input.SourceURL,
@@ -411,11 +571,36 @@ func (e *Engine) resolveResumeStage(humanInput string) (int, string) {
 
 	input := strings.TrimSpace(humanInput)
 
+	// --- 新增：反馈类型识别 ---
+	feedbackClassifier := NewFeedbackClassifier()
+	feedbackType := feedbackClassifier.Classify(input)
+
+	// 系统反馈：暂不处理，继续正常流程
+	if feedbackType == FeedbackTypeSystem {
+		// TODO: 后续可在此处理系统反馈，提示用户确认保存规则
+		e.sse.SendInfo("检测到系统反馈建议，任务完成后将提示保存规则")
+	}
+
+	// 解析反馈意图
+	targetStageID, shouldRerun, constraint := ParseFeedbackIntent(input, "")
+	if shouldRerun && constraint != "" {
+		// 设置反馈约束，将在 worker 执行时注入 prompt
+		e.input.FeedbackConstraint = constraint
+		e.sse.SendInfo("收到反馈：" + constraint)
+	}
+	if targetStageID != "" {
+		for i, s := range e.def.Stages {
+			if s.ID == targetStageID {
+				return i, humanStageID
+			}
+		}
+	}
+
 	// Parse user choice:
-	// 1 or 确认 → continue from next stage after human
+	// 1 or 确认 → continue from next stage after human (confirm_outline → write)
 	// 2 or 调整 → re-run from "create" stage
-	// 3 or 更换素材 → re-run from "research" stage
-	// 4 or 重新 → full restart from stage 0
+	// 3 or 更换素材 → re-run from "material_check" stage (new: was research)
+	// 4 or 重新 → full restart from stage 0 (research)
 	switch {
 	case input == "1" || strings.Contains(input, "确认"):
 		return pausedIdx + 1, humanStageID
@@ -424,13 +609,23 @@ func (e *Engine) resolveResumeStage(humanInput string) (int, string) {
 		// Find "create" stage
 		for i, s := range e.def.Stages {
 			if s.ID == "create" {
+				// 设置约束
+				if !strings.Contains(input, "确认") {
+					e.input.FeedbackConstraint = "大纲调整：" + input
+				}
 				return i, humanStageID
 			}
 		}
 		return pausedIdx + 1, humanStageID
 
 	case input == "3" || strings.Contains(input, "更换素材"):
-		// Find "research" stage
+		// Find "material_check" stage (new: restart from material judgment)
+		for i, s := range e.def.Stages {
+			if s.ID == "material_check" {
+				return i, humanStageID
+			}
+		}
+		// Fallback: restart from research if material_check not found
 		for i, s := range e.def.Stages {
 			if s.ID == "research" {
 				return i, humanStageID
